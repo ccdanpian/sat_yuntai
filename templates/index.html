@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>卫星通信参数计算器</title>
+    <!-- Bootstrap CSS -->
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <!-- DataTables CSS -->
+    <link href="{{ url_for('static', filename='css/dataTables.bootstrap5.min.css') }}" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="{{ url_for('static', filename='css/chart.js') }}"></script>
+    <!-- Luxon -->
+    <script src="{{ url_for('static', filename='css/luxon.min.js') }}"></script>
+    <!-- Chart.js Luxon Adapter -->
+    <script src="{{ url_for('static', filename='css/chartjs-adapter-luxon.min.js') }}"></script>
+    <!-- Three.js -->
+    <script src="{{ url_for('static', filename='css/three.min.js') }}"></script>
+    <!-- Three.js OrbitControls -->
+    <script src="{{ url_for('static', filename='css/OrbitControls.js') }}"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- 删除这两行Bootstrap JavaScript引用 -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script> -->
+    <script src="https://cdn.datatables.net/1.10.25/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.10.25/js/dataTables.bootstrap5.min.js"></script>
+    <style>
+        #visualization {
+            width: 100%;
+            height: 600px;
+        }
+        @media (max-width: 768px) {
+            .chart-container {
+                margin-bottom: 20px;
+            }
+        }
+        .dataTables_wrapper {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        #resultsTable {
+            width: 98% !important;
+            table-layout: fixed;
+            font-size: 0.85em;
+        }
+        #resultsTable th,
+        #resultsTable td {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #resultsTable th:first-child,
+        #resultsTable td:first-child {
+            width: 120px !important;
+            min-width: 120px !important;
+        }
+        @media (max-width: 768px) {
+            #resultsTable {
+                font-size: 0.8em;
+            }
+        }
+        .parameter-section {
+            font-size: 13px;
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .parameter-section h2 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 8px;
+        }
+        .form-label {
+            font-size: 12px;
+            margin-bottom: 2px;
+        }
+        .form-control, .form-select {
+            font-size: 13px;
+            padding: 4px 8px;
+            height: auto;
+        }
+        .btn {
+            font-size: 13px;
+            padding: 4px 10px;
+        }
+        .row {
+            margin-right: -5px;
+            margin-left: -5px;
+        }
+        .col, [class*="col-"] {
+            padding-right: 5px;
+            padding-left: 5px;
+        }
+        .border {
+            padding: 10px;
+        }
+        .mt-2 {
+            margin-top: 0.5rem !important;
+        }
+        .mt-3 {
+            margin-top: 0.75rem !important;
+        }
+        .mb-3 {
+            margin-bottom: 0.75rem !important;
+        }
+        /* 添加到现有的 style 标签中 */
+        .section-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #555;
+            position: absolute;
+            top: -10px;
+            left: 10px;
+            background-color: #f8f9fa;
+            padding: 0 5px;
+        }
+        .parameter-section {
+            position: relative;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px 10px 10px;
+            margin-bottom: 15px;
+        }
+        /* 响应式表格样式 */
+        @media screen and (max-width: 768px) {
+            #resultsTable {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+            
+            #resultsTable th,
+            #resultsTable td {
+                min-width: 100px; /* 设置最小列宽 */
+            }
+        }
+        
+        /* PC 端表格样式 */
+        @media screen and (min-width: 769px) {
+            #resultsTable {
+                width: 100% !important;
+                table-layout: auto;
+            }
+            
+            #resultsTable th,
+            #resultsTable td {
+                width: auto !important;
+                max-width: none !important;
+            }
+        }
+        
+        /* 通用表格样式 */
+        #resultsTable {
+            font-size: 0.85em;
+        }
+        
+        #resultsTable th,
+        #resultsTable td {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* 第一列固定宽度 */
+        #resultsTable th:first-child,
+        #resultsTable td:first-child {
+            width: 120px !important;
+            min-width: 120px !important;
+        }
+        
+        /* 横向滚动样式（仅在移动端生效） */
+        @media screen and (max-width: 768px) {
+            .table-responsive {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="notification" style="display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%); 
+        background-color: rgba(0, 0, 0, 0.8); color: white; padding: 10px 20px; border-radius: 5px; 
+        z-index: 9999; transition: opacity 0.3s ease-in-out;">
+    </div>
+    <div class="container-fluid mt-3">
+        <h2 class="mb-2"></h2>
+        <form id="calculatorForm">
+            <!-- 第一组参数：搜索参数 -->
+            <div class="parameter-section">
+                <span class="section-title">搜索参数</span>
+                <div class="row g-2">
+                    <div class="col-md-1">
+                        <label for="preset-locations" class="form-label">预置位置</label>
+                        <select class="form-select" id="preset-locations">
+                            <option value="">选择预置位置</option>
+                        </select>
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="button" id="add-preset-btn" class="btn btn-outline-primary w-100">添加</button>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="lat_ue" class="form-label">用户纬度</label>
+                        <input type="number" class="form-control" id="lat_ue" name="lat_ue" value="40.041667" required step="any">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="lon_ue" class="form-label">用户经度</label>
+                        <input type="number" class="form-control" id="lon_ue" name="lon_ue" value="116.295" required step="any">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="alt_ue" class="form-label">用户高度 (km)</label>
+                        <input type="number" class="form-control" id="alt_ue" name="alt_ue" value="0" required step="any">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="satelliteConstellation" class="form-label">卫星星座</label>
+                        <select class="form-select" id="satelliteConstellation" name="constellation">
+                            <!-- 添加星座选项 -->
+                        </select>
+                    </div>
+                    <div class="col-md-1">
+                        <label for="delta_lat" class="form-label">偏离手机纬度（°）</label>
+                        <input type="number" class="form-control" id="delta_lat" name="delta_lat" step="any">
+                    </div>
+                    <div class="col-md-1">
+                        <label for="delta_lon" class="form-label">偏离手机经度（°）</label>
+                        <input type="number" class="form-control" id="delta_lon" name="delta_lon" step="any">
+                    </div>
+                </div>
+                <div class="row g-2 mt-2">
+                    <div class="col-md-2">
+                        <label for="lat_error" class="form-label">允许的纬度误差</label>
+                        <input type="number" class="form-control" id="lat_error" name="lat_error" value="10" step="any">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="lon_error" class="form-label">允许的经度误差</label>
+                        <input type="number" class="form-control" id="lon_error" name="lon_error" value="10" step="any">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="start_time" class="form-label">开始时间</label>
+                        <input type="datetime-local" class="form-control" id="start_time" name="start_time" value="2024-10-21T21:50" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="end_time" class="form-label">结束时间</label>
+                        <input type="datetime-local" class="form-control" id="end_time" name="end_time" value="2024-10-21T21:55" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="search_interval" class="form-label">查找间隔时间 (秒)</label>
+                        <input type="number" class="form-control" id="search_interval" name="search_interval" value="60" required min="1">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 第二组参数：卫星参数 -->
+            <div class="parameter-section">
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <label for="satellite" class="form-label">卫星</label>
+                        <select class="form-select" id="satellite" name="satellite" required>
+                            <!-- 卫星选项将通过JavaScript动态填充 -->
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="sat_lat" class="form-label">卫星纬度</label>
+                        <input type="text" class="form-control" id="sat_lat" readonly>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="sat_lon" class="form-label">卫星经度</label>
+                        <input type="text" class="form-control" id="sat_lon" readonly>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="found_time" class="form-label">满足条件的时间</label>
+                        <input type="datetime-local" class="form-control" id="found_time">
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" id="searchSatelliteBtn" class="btn btn-secondary w-100">查找卫星</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 第三组参数：计算参数 -->
+            <div class="parameter-section">
+                <span class="section-title">计算参数</span>
+                <div class="row g-2">
+                    <div class="col-md-2">
+                        <label for="interval" class="form-label">计算时间间隔 (秒)</label>
+                        <input type="number" class="form-control" id="interval" name="interval" value="60" required min="1">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="points_before" class="form-label">当前时刻前点数</label>
+                        <input type="number" class="form-control" id="points_before" name="points_before" value="5" required min="0">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="points_after" class="form-label">当前时刻后点数</label>
+                        <input type="number" class="form-control" id="points_after" name="points_after" value="5" required min="0">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="frequency" class="form-label">频率 (MHz)</label>
+                        <input type="number" class="form-control" id="frequency" name="frequency" value="3600" step="any">
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-check mt-4">
+                            <input class="form-check-input" type="checkbox" id="show_cover" name="show_cover">
+                            <label class="form-check-label" for="show_all">
+                                计算所有卫星
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 第四组参数：圆锥体参数 -->
+            <div class="parameter-section">
+                <div class="row g-2">
+                    <div class="col-md-2">
+                        <label for="cone-azimuth" class="form-label">圆锥方位角 (度)</label>
+                        <input type="number" class="form-control" id="cone-azimuth" value="0" step="any">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="cone-elevation" class="form-label">圆锥仰角 (度)</label>
+                        <input type="number" class="form-control" id="cone-elevation" value="90" step="any">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="cone-height" class="form-label">圆锥高度</label>
+                        <input type="number" class="form-control" id="cone-height" value="700" step="any">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="cone-angle" class="form-label">圆锥顶角 (度)</label>
+                        <input type="number" class="form-control" id="cone-angle" value="10" step="any">
+                    </div>
+                    <div class="col-md-4 d-flex justify-content-end align-items-end">
+                        <button type="button" id="update-cone" class="btn btn-secondary" style="width: auto;">更新锥体</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 计算按钮 -->
+            <div class="row mt-3">
+                <div class="col-md-12">
+                    <button type="submit" id="calculate-button" class="btn btn-primary w-100">计算</button>
+                </div>
+            </div>
+            <!-- 在合适的位置添加进度显示器 -->
+            <div id="progress-container" style="display: none; text-align: center; margin: 20px;">
+                <div class="progress">
+                    <div id="progress-bar" class="progress-bar" role="progressbar" style="width: 0%;">0%</div>
+                </div>
+                <div id="progress-text">正在计算中...</div>
+            </div>
+        </form>
+
+        <div id="loading" class="mt-3" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">加载中...</span>
+            </div>
+            <span class="ms-2">计算���，请稍候...</span>
+        </div>
+
+        <div id="error" class="mt-3 alert alert-danger" style="display: none;"></div>
+
+        <div id="results" class="mt-4 d-flex flex-column align-items-center" style="display: none;">
+            <!-- 移除了 "计算结果" 标题 -->
+            
+            <!-- 数据表 -->
+            <div class="mt-4 w-100 table-responsive">
+                <table id="resultsTable" class="table table-striped table-bordered mx-auto" style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th style="width: 12%;">时间</th>
+                            <th style="width: 7%;">卫星</th>
+                            <th style="width: 7%;">卫星纬度</th>
+                            <th style="width: 7%;">卫星经度</th>
+                            <th style="width: 8%;">卫星高度 (km)</th>
+                            <th style="width: 8%;">距离 (km)</th>
+                            <th style="width: 7%;">α (度)</th>
+                            <th style="width: 8%;">β (仰角，度)</th>
+                            <th style="width: 8%;">β水平 (度)</th>
+                            <th style="width: 8%;">方位角 (度)</th>
+                            <th style="width: 9%;">相对速度 (km/s)</th>
+                            <th style="width: 9%;">多普勒频移 (Hz)</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <!-- 3D 可视化 -->
+            <div id="visualization" class="mt-4" style="width: 98%; height: 600px;"></div>
+
+            <!-- 曲线图 -->
+            <div class="row mt-4 w-100">
+                <div class="col-md-6 chart-container" style="height: 400px;">
+                    <canvas id="distanceChart"></canvas>
+                </div>
+                <div class="col-md-6 chart-container" style="height: 400px;">
+                    <canvas id="elevationChart"></canvas>
+                </div>
+            </div>
+            <div class="row mt-4 w-100">
+                <div class="col-md-6 chart-container" style="height: 400px;">
+                    <canvas id="azimuthChart"></canvas>
+                </div>
+                <div class="col-md-6 chart-container" style="height: 400px;">
+                    <canvas id="dopplerChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <script src="{{ url_for('static', filename='js/visualization.js') }}"></script>
+    <script>
+        let distanceChart = null;
+        let elevationChart = null;
+        let azimuthChart = null;
+
+        let progressInterval;
+
+        function startProgressPolling() {
+            progressInterval = setInterval(() => {
+                fetch('/progress')
+                    .then(response => response.json())
+                    .then(data => {
+                        const progressBar = document.getElementById('progress-bar');
+                        
+                        progressBar.style.width = `${data.percentage}%`;
+                        progressBar.textContent = `${data.percentage}%`;
+
+                        // 如果计算完成或出错，停止轮询
+                        if (data.percentage >= 100 || data.status === "出错") {
+                            clearInterval(progressInterval);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('获取进度时发生错误:', error);
+                        clearInterval(progressInterval);
+                    });
+            }, 200); // 每秒请求一次
+        }
+
+        function updateTLEAndSatelliteList(constellation) {
+            if (!constellation) {
+                console.log('没有选择星座');
+                return;
+            }
+
+            // 显示提示
+            const notification = document.getElementById('notification');
+            notification.textContent = `正在更新${constellation}星座卫星列表...`;
+            notification.style.display = 'block';
+            notification.style.opacity = '1';
+            
+            // 更新卫星列表
+            fetch(`/get_satellite_names?constellation=${constellation}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Get satellite names response data:', data);
+                    const satelliteSelect = document.getElementById('satellite');
+                    satelliteSelect.innerHTML = ''; // 清空现有选项
+                    
+                    if (data.satellite_names && Array.isArray(data.satellite_names)) {
+                        data.satellite_names.forEach(sat => {
+                            const option = document.createElement('option');
+                            option.value = sat;
+                            option.textContent = sat;
+                            satelliteSelect.appendChild(option);
+                        });
+                        console.log(`Updated satellite list for ${constellation} with ${data.satellite_names.length} satellites`);
+                        
+                        // 更新成功提示
+                        notification.textContent = `${constellation}星座卫星列表更新完成`;
+                        setTimeout(() => {
+                            notification.style.opacity = '0';
+                            setTimeout(() => {
+                                notification.style.display = 'none';
+                            }, 300);
+                        }, 1500);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching satellite names:', error);
+                    // 错误提示
+                    notification.textContent = `更新${constellation}星座卫星列表失败`;
+                    notification.style.backgroundColor = 'rgba(220, 53, 69, 0.8)';
+                    setTimeout(() => {
+                        notification.style.opacity = '0';
+                        setTimeout(() => {
+                            notification.style.display = 'none';
+                            notification.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+                        }, 300);
+                    }, 1500);
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const constellationSelect = document.getElementById('satelliteConstellation');
+            const constellations = [
+                'iridium',
+                'tiantong',
+                'globalstar',
+                'starlink',
+                'starlink_dtc',
+                'oneweb',
+                'gps',
+                'beidou',
+                'x2'
+            ];
+
+            // 初始化星座下拉框
+            constellations.forEach(constellation => {
+                const option = document.createElement('option');
+                option.value = constellation;
+                option.textContent = constellation;
+                constellationSelect.appendChild(option);
+            });
+
+            // 设置默认选中的星座
+            constellationSelect.value = 'iridium';
+
+            // 初始化时延迟加载卫星列表
+            setTimeout(() => {
+                updateTLEAndSatelliteList(constellationSelect.value);
+            }, 500);
+
+            // 星座选择变化时更新卫星列表
+            constellationSelect.addEventListener('change', function() {
+                console.log('星座已更改为:', this.value);
+                updateTLEAndSatelliteList(this.value);
+            });
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // 移除这行，因为它现在在 visualization.js 中处理
+            // initVisualization();
+
+            // 添加星座选择事件监听器
+            document.getElementById('satelliteConstellation').addEventListener('change', function() {
+                updateTLEAndSatelliteList(this.value);
+            });
+
+            // 表单提交处理
+            document.getElementById('calculatorForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // 禁用圆锥参数的HTML5验证并重置为默认值
+                const coneInputs = ['cone-azimuth', 'cone-elevation', 'cone-height', 'cone-angle'];
+                coneInputs.forEach(id => {
+                    const input = document.getElementById(id);
+                    input.setCustomValidity(''); // 清除任何自定义验证消息
+                });
+                
+                // 重置圆锥参数为默认值
+                document.getElementById('cone-azimuth').value = '0';
+                document.getElementById('cone-elevation').value = '90';
+                document.getElementById('cone-height').value = '700';
+                document.getElementById('cone-angle').value = '10';
+
+                // 显示进度条
+                document.getElementById('progress-container').style.display = 'block';
+
+                // 开始轮询进度
+                startProgressPolling();
+
+                // 修改时间解析逻辑
+                let foundTimeValue = document.getElementById('found_time').value;
+                let foundTime;
+                if (foundTimeValue) {
+                    // datetime-local格式为 "YYYY-MM-DDTHH:mm"
+                    foundTime = luxon.DateTime.fromISO(foundTimeValue);
+                } else {
+                    // 如果没有设置时间，使用当前时间
+                    foundTime = luxon.DateTime.now();
+                }
+                let interval = parseInt(document.getElementById('interval').value);
+                let pointsBefore = parseInt(document.getElementById('points_before').value);
+                let pointsAfter = parseInt(document.getElementById('points_after').value);
+                const showAllSatellites = document.getElementById('show_cover').checked;
+                const constellation = document.getElementById('satelliteConstellation').value;
+
+                // 计算开始和结束时间
+                let startTime = foundTime.minus({ seconds: interval * pointsBefore });
+                let endTime = foundTime.plus({ seconds: interval * pointsAfter });
+
+                const userPosition = getUserPosition();
+
+                fetch('/calculate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        lat_ue: parseFloat(document.getElementById('lat_ue').value),
+                        lon_ue: parseFloat(document.getElementById('lon_ue').value),
+                        alt_ue: parseFloat(document.getElementById('alt_ue').value),
+                        satellite_name: showAllSatellites ? null : document.getElementById('satellite').value,
+                        start_time: startTime.toISO(),
+                        end_time: endTime.toISO(),
+                        interval: interval,
+                        points_before: pointsBefore,
+                        points_after: pointsAfter,
+                        show_cover: showAllSatellites,
+                        frequency: parseFloat(document.getElementById('frequency').value),
+                        constellation: constellation
+                    }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // 处理返回的数据，更新图表等
+                    displayResults(data, userPosition);
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                    alert('计算过程中发生错误，请检查输入并重试。');
+                });
+            });
+
+            function displayResults(data, userPosition) {
+                console.log("Received data:", data);
+                
+                const allResults = Array.isArray(data) ? data : (data.results || []);
+                
+                if (allResults.length === 0) {
+                    console.error("No results to display");
+                    return;
+                }
+
+                document.getElementById('results').style.display = 'block';
+
+                // 更新数据表格
+                const table = $('#resultsTable').DataTable();
+                table.clear();
+                
+                // 格式化数据
+                allResults.forEach(d => {
+                    table.row.add({
+                        time: luxon.DateTime.fromISO(d.time).toFormat('yyyy-MM-dd HH:mm:ss'),
+                        satellite_name: d.satellite_name,
+                        lat_sat: d.lat_sat.toFixed(4),
+                        lon_sat: d.lon_sat.toFixed(4),
+                        alt_sat: d.alt_sat.toFixed(2),
+                        distance: d.distance.toFixed(2),
+                        alpha: d.alpha.toFixed(2),
+                        beta: d.beta.toFixed(2),
+                        beta_shuiping: d.beta_shuiping.toFixed(2),
+                        direction_angle: d.direction_angle.toFixed(2),
+                        relative_velocity: d.relative_velocity.toFixed(4),
+                        doppler_shift: d.doppler_shift.toFixed(2)
+                    });
+                });
+                table.draw();
+
+                // 按卫星分组数据
+                const satelliteGroups = {};
+                allResults.forEach(result => {
+                    if (!satelliteGroups[result.satellite_name]) {
+                        satelliteGroups[result.satellite_name] = [];
+                    }
+                    satelliteGroups[result.satellite_name].push(result);
+                });
+
+                // 为每个卫星创建数据系列
+                const datasets = Object.entries(satelliteGroups).map(([satName, results], index) => ({
+                    label: satName,
+                    data: results,
+                    borderColor: `hsl(${(index * 360) / Object.keys(satelliteGroups).length}, 70%, 50%)`,
+                    backgroundColor: `hsla(${(index * 360) / Object.keys(satelliteGroups).length}, 70%, 50%, 0.5)`,
+                }));
+
+                // 更新图表
+                const showAllSatellites = document.getElementById('show_cover').checked;
+                if (!showAllSatellites) {
+                    createMultiSeriesChart('distanceChart', datasets, '距离 (km)', d => d.distance);
+                    createMultiSeriesChart('elevationChart', datasets, '仰角 (度)', d => d.beta);
+                    createMultiSeriesChart('azimuthChart', datasets, '方位角 (度)', d => d.direction_angle);
+                    createMultiSeriesChart('dopplerChart', datasets, '多普勒频移 (Hz)', d => d.doppler_shift);
+                } else {
+                    // 清除现有图表
+                    ['distanceChart', 'elevationChart', 'azimuthChart', 'dopplerChart'].forEach(chartId => {
+                        const canvas = document.getElementById(chartId);
+                        if (canvas) {
+                            const ctx = canvas.getContext('2d');
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        }
+                    });
+                }
+
+                // 更新3D可视化
+                updateVisualization(allResults, userPosition);
+            }
+
+            // 创建多系列图表的函数
+            function createMultiSeriesChart(canvasId, datasets, label, valueAccessor) {
+                const ctx = document.getElementById(canvasId).getContext('2d');
+                
+                if (window[canvasId + 'Chart']) {
+                    window[canvasId + 'Chart'].destroy();
+                }
+
+                const chartDatasets = datasets.map(dataset => ({
+                    label: dataset.label,
+                    data: dataset.data.map(d => ({
+                        x: luxon.DateTime.fromISO(d.time),
+                        y: valueAccessor(d)
+                    })),
+                    borderColor: dataset.borderColor,
+                    backgroundColor: dataset.backgroundColor,
+                    tension: 0.1,
+                    pointRadius: 2,
+                    pointHoverRadius: 4,
+                    borderWidth: 1
+                }));
+
+                window[canvasId + 'Chart'] = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        datasets: chartDatasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: {
+                                    unit: 'minute',
+                                    displayFormats: {
+                                        minute: 'HH:mm'
+                                    }
+                                },
+                                title: {
+                                    display: true,
+                                    text: '时间'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: label
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            },
+                            title: {
+                                display: true,
+                                text: label
+                            }
+                        }
+                    }
+                });
+            }
+
+            // 初始化 DataTable
+            if ($('#resultsTable').length > 0) {  // 确保表格存在
+                try {
+                    $('#resultsTable').DataTable({
+                        destroy: true,  // 如果已经初始化过，先销毁
+                        language: {
+                            "sProcessing": "处理中...",
+                            "sLengthMenu": "显示 _MENU_ 项结果",
+                            "sZeroRecords": "没有匹配结果",
+                            "sInfo": "显示第 _START_ 至 _END_ 项结果，共 _TOTAL_ 项",
+                            "sInfoEmpty": "显示第 0 至 0 项结果，共 0 项",
+                            "sInfoFiltered": "(由 _MAX_ 项结果过)",
+                            "sInfoPostFix": "",
+                            "sSearch": "搜索:",
+                            "sUrl": "",
+                            "sEmptyTable": "表中数据为空",
+                            "sLoadingRecords": "载入中...",
+                            "sInfoThousands": ",",
+                            "oPaginate": {
+                                "sFirst": "首页",
+                                "sPrevious": "上页",
+                                "sNext": "下页",
+                                "sLast": "末页"
+                            },
+                            "oAria": {
+                                "sSortAscending": ": 以升序排列列",
+                                "sSortDescending": ": 以降序排列此列"
+                            }
+                        },
+                        columns: [
+                            { data: "time", title: "时间" },
+                            { data: "satellite_name", title: "卫星编号" },
+                            { data: "lat_sat", title: "卫星纬度" },
+                            { data: "lon_sat", title: "卫星经度" },
+                            { data: "alt_sat", title: "卫星高度(km)" },
+                            { data: "distance", title: "距离(km)" },
+                            { data: "alpha", title: "α角(度)" },
+                            { data: "beta", title: "β角(仰角)" },
+                            { data: "beta_shuiping", title: "β水平(度)" },
+                            { data: "direction_angle", title: "方位角(度)" },
+                            { data: "relative_velocity", title: "相对速度(km/s)" },
+                            { data: "doppler_shift", title: "多普勒频移(Hz)" }
+                        ],
+                        scrollX: true,
+                        pageLength: 25,
+                        lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "全部"]]
+                    });
+                } catch (error) {
+                    console.error('DataTable initialization error:', error);
+                }
+            }
+
+            // 监听窗口大小变化，重新绘制表格
+            $(window).resize(function() {
+                $('#resultsTable').DataTable().columns.adjust().draw();
+            });
+
+            // 添加以下CSS来调整输入框宽度
+            $('<style>')
+                .prop('type', 'text/css')
+                .html(`
+                    .dataTables_length select {
+                        width: 80px !important;  // 增加选择框宽度
+                    }
+                    .dataTables_filter input {
+                        width: 200px !important;  // 增加搜索框宽度
+                    }
+                `)
+                .appendTo('head');
+
+            // 修改查找卫星按钮的事件监听器
+            document.getElementById('searchSatelliteBtn').addEventListener('click', function() {
+                console.log('开始查找卫星...');
+                
+                // 显示加载状态
+                const button = this;
+                button.disabled = true;
+                button.innerHTML = '查找中...';
+                
+                let startTime = new Date(document.getElementById('start_time').value + 'Z');
+                let endTime = new Date(document.getElementById('end_time').value + 'Z');
+                let selectedConstellation = document.getElementById('satelliteConstellation').value;
+
+                const searchData = {
+                    lat_ue: parseFloat(document.getElementById('lat_ue').value),
+                    lon_ue: parseFloat(document.getElementById('lon_ue').value),
+                    alt_ue: parseFloat(document.getElementById('alt_ue').value),
+                    delta_lat: parseFloat(document.getElementById('delta_lat').value) || 0,
+                    delta_lon: parseFloat(document.getElementById('delta_lon').value) || 0,
+                    start_time: startTime.toISOString(),
+                    end_time: endTime.toISOString(),
+                    search_interval: parseInt(document.getElementById('search_interval').value),
+                    lat_error: parseFloat(document.getElementById('lat_error').value) || null,
+                    lon_error: parseFloat(document.getElementById('lon_error').value) || null,
+                    constellation: selectedConstellation
+                };
+
+                console.log('发送的搜索参数:', searchData);
+
+                fetch('/search_satellite', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(searchData)
+                })
+                .then(response => {
+                    console.log('收到服务器响应:', response.status);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('收到的数据:', data);
+                    if (data.satellite) {
+                        document.getElementById('satellite').value = data.satellite;
+                        document.getElementById('sat_lat').value = data.lat_sat ? data.lat_sat.toFixed(4) : 'N/A';
+                        document.getElementById('sat_lon').value = data.lon_sat ? data.lon_sat.toFixed(4) : 'N/A';
+                        // 设置找到的时间，转换为datetime-local格式
+                        document.getElementById('found_time').value = luxon.DateTime.fromISO(data.time).toFormat('yyyy-MM-dd\'T\'HH:mm');
+                    } else {
+                        alert('未找到满足条件的卫星');
+                    }
+                })
+                .catch((error) => {
+                    console.error('查找卫星时发生错误:', error);
+                    alert('查找卫星过程中发生错误，请检查输入并重试。\n错误信息: ' + error.message);
+                })
+                .finally(() => {
+                    // 恢复按钮状态
+                    button.disabled = false;
+                    button.innerHTML = '查找卫星';
+                });
+            });
+
+            // const positionSource = document.getElementById('position-source');
+            // const latInput = document.getElementById('lat_ue');
+            // const lonInput = document.getElementById('lon_ue');
+
+            // positionSource.addEventListener('change', function() {
+            //     if (this.value === 'browser') {
+            //         if ("geolocation" in navigator) {
+            //             navigator.geolocation.getCurrentPosition(function(position) {
+            //                 latInput.value = position.coords.latitude.toFixed(6);
+            //                 lonInput.value = position.coords.longitude.toFixed(6);
+            //             }, function(error) {
+            //                 console.error("获取用户位置失败:", error);
+            //                 alert("无法获取浏览器地理置，请手动输入或选择查找卫星参数。");
+            //             });
+            //         } else {
+            //             alert("您的浏览器不支持地理位置功能，请手动输入或选择查找卫星参数。");
+            //         }
+            //     }
+            // });
+
+            function getUserPosition() {
+                return {
+                    lat: parseFloat(document.getElementById('lat_ue').value),
+                    lon: parseFloat(document.getElementById('lon_ue').value),
+                    alt: parseFloat(document.getElementById('alt_ue').value)
+                };
+            }
+        });
+
+        // 响应式设计
+        window.addEventListener('resize', function() {
+            if (renderer) {
+                renderer.setSize(document.getElementById('visualization').clientWidth, 600);
+                camera.aspect = document.getElementById('visualization').clientWidth / 600;
+                camera.updateProjectionMatrix();
+            }
+        });
+
+
+        document.getElementById('calculate-button').addEventListener('click', function() {
+            // 清除旧的表
+            if (distanceChart) distanceChart.destroy();
+            if (elevationChart) elevationChart.destroy();
+            if (azimuthChart) azimuthChart.destroy();
+
+            // 重置图表引用
+            distanceChart = elevationChart = azimuthChart = null;
+
+            // 继续执行计算
+            calculateParameters();
+        });
+
+        // 预置位置管理功能
+        class PresetLocationManager {
+            constructor() {
+                this.storageKey = 'satellite_preset_locations';
+                this.init();
+            }
+
+            init() {
+                this.loadPresetLocations();
+                this.bindEvents();
+            }
+
+            // 从浏览器缓存加载预置位置
+            loadPresetLocations() {
+                const locations = this.getStoredLocations();
+                const select = document.getElementById('preset-locations');
+                
+                // 清空现有选项（保留第一个"添加预置位置"选项）
+                while (select.children.length > 1) {
+                    select.removeChild(select.lastChild);
+                }
+                
+                // 添加存储的位置
+                locations.forEach(location => {
+                    const option = document.createElement('option');
+                    option.value = JSON.stringify(location);
+                    option.textContent = location.name;
+                    select.appendChild(option);
+                });
+            }
+
+            // 获取存储的位置
+            getStoredLocations() {
+                const stored = localStorage.getItem(this.storageKey);
+                return stored ? JSON.parse(stored) : [];
+            }
+
+            // 保存位置到浏览器缓存
+            saveLocations(locations) {
+                localStorage.setItem(this.storageKey, JSON.stringify(locations));
+            }
+
+            // 绑定事件
+            bindEvents() {
+                const select = document.getElementById('preset-locations');
+                const addBtn = document.getElementById('add-preset-btn');
+
+                // 选择预置位置事件（只处理选择，不处理添加）
+                select.addEventListener('change', (e) => {
+                    if (e.target.value !== '') {
+                        // 选择了具体位置，填充到输入框
+                        const location = JSON.parse(e.target.value);
+                        this.fillLocationInputs(location);
+                    }
+                });
+
+                // 添加预置位置按钮事件
+                addBtn.addEventListener('click', () => {
+                    this.showManageDialog();
+                });
+            }
+
+            // 填充位置到输入框
+            fillLocationInputs(location) {
+                document.getElementById('lat_ue').value = location.latitude;
+                document.getElementById('lon_ue').value = location.longitude;
+                document.getElementById('alt_ue').value = location.altitude;
+                
+                // 重置选择框到默认状态
+                document.getElementById('preset-locations').value = '';
+            }
+
+            // 清除所有预置位置（可选功能）
+            clearAllLocations() {
+                if (confirm('确定要清除所有预置位置吗？')) {
+                    localStorage.removeItem(this.storageKey);
+                    this.loadPresetLocations();
+                }
+            }
+
+            // 显示管理对话框
+            showManageDialog() {
+                const existingLocations = this.getStoredLocations();
+                const existingJson = JSON.stringify(existingLocations, null, 2);
+                
+                // 首先询问用户要执行什么操作
+                const wantToClear = window.confirm(
+                    '预置位置管理\n\n' +
+                    '当前位置：\n' + existingJson + '\n\n' +
+                    '点击"确定"添加新位置\n' +
+                    '点击"取消"清除所有位置'
+                );
+                
+                if (wantToClear === false) {
+                    // 用户选择清除
+                    this.clearAllLocations();
+                    return;
+                }
+                
+                // 用户选择添加新位置，复制JSON模板到剪贴板（包含两个位置示例）
+                const jsonTemplate = '[{"name":"北京","latitude":39.9042,"longitude":116.4074,"altitude":0},{"name":"上海","latitude":31.2304,"longitude":121.4737,"altitude":0}]';
+                
+                // 尝试复制到剪贴板
+                try {
+                    navigator.clipboard.writeText(jsonTemplate).then(() => {
+                        console.log('JSON模板已复制到剪贴板');
+                    }).catch(err => {
+                        console.log('复制失败:', err);
+                    });
+                } catch (err) {
+                    console.log('浏览器不支持剪贴板API:', err);
+                }
+                
+                // 用户选择添加新位置
+                const newLocationJson = window.prompt(
+                    '请输入新的预置位置（JSON格式）：\n\n' +
+                    '📋 JSON模板已复制到剪贴板，您可以直接粘贴(Ctrl+V)后修改\n\n' +
+                    '格式示例（可同时添加多个位置）：\n' +
+                    '[\n' +
+                    '  {"name":"北京","latitude":39.9042,"longitude":116.4074,"altitude":0},\n' +
+                    '  {"name":"上海","latitude":31.2304,"longitude":121.4737,"altitude":0}\n' +
+                    ']\n\n' +
+                    '字段说明：\n' +
+                    '• name: 位置名称\n' +
+                    '• latitude: 纬度\n' +
+                    '• longitude: 经度\n' +
+                    '• altitude: 海拔高度(米)',
+                    ''
+                );
+                
+                if (newLocationJson === null || newLocationJson.trim() === '') {
+                    return; // 用户取消或输入为空
+                }
+                
+                try {
+                    const newLocations = JSON.parse(newLocationJson);
+                    if (!Array.isArray(newLocations)) {
+                        alert('输入格式错误：必须是数组格式');
+                        return;
+                    }
+                    
+                    // 验证每个位置对象的格式
+                    for (const loc of newLocations) {
+                        if (!loc.name || typeof loc.latitude !== 'number' || typeof loc.longitude !== 'number') {
+                            alert('输入格式错误：每个位置必须包含name(字符串)、latitude(数字)、longitude(数字)字段');
+                            return;
+                        }
+                    }
+                    
+                    // 合并现有位置和新位置
+                    const existingLocations = this.getStoredLocations();
+                    const allLocations = [...existingLocations, ...newLocations];
+                    
+                    // 去重（基于名称）
+                    const uniqueLocations = allLocations.filter((location, index, self) => 
+                        index === self.findIndex(l => l.name === location.name)
+                    );
+                    
+                    // 保存并重新加载
+                    this.saveLocations(uniqueLocations);
+                    this.loadPresetLocations();
+                    
+                    alert(`成功添加 ${newLocations.length} 个预置位置！`);
+                    
+                } catch (error) {
+                    alert('JSON格式错误，请检查输入格式：' + error.message);
+                }
+            }
+        }
+
+        // 在页面加载完成后初始化预置位置管理器
+        window.presetLocationManager = new PresetLocationManager();
+        
+    </script>
+</body>
+</html>
