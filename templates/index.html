@@ -191,17 +191,17 @@
     <div class="container-fluid mt-3">
         <h2 class="mb-2"></h2>
         <form id="calculatorForm">
-            <!-- 第一组参数：搜索参数 -->
+            <!-- 第一组参数：用户位置参数 -->
             <div class="parameter-section">
-                <span class="section-title">搜索参数</span>
+                <span class="section-title">用户位置参数</span>
                 <div class="row g-2">
-                    <div class="col-md-1">
+                    <div class="col-md-2">
                         <label for="preset-locations" class="form-label">预置位置</label>
                         <select class="form-select" id="preset-locations">
                             <option value="">选择预置位置</option>
                         </select>
                     </div>
-                    <div class="col-md-1">
+                    <div class="col-md-2">
                         <label class="form-label">&nbsp;</label>
                         <button type="button" id="add-preset-btn" class="btn btn-outline-primary w-100">添加</button>
                     </div>
@@ -223,62 +223,18 @@
                             <!-- 添加星座选项 -->
                         </select>
                     </div>
-                    <div class="col-md-1">
-                        <label for="delta_lat" class="form-label">偏离手机纬度（°）</label>
-                        <input type="number" class="form-control" id="delta_lat" name="delta_lat" step="any">
-                    </div>
-                    <div class="col-md-1">
-                        <label for="delta_lon" class="form-label">偏离手机经度（°）</label>
-                        <input type="number" class="form-control" id="delta_lon" name="delta_lon" step="any">
-                    </div>
-                </div>
-                <div class="row g-2 mt-2">
-                    <div class="col-md-2">
-                        <label for="lat_error" class="form-label">允许的纬度误差</label>
-                        <input type="number" class="form-control" id="lat_error" name="lat_error" value="10" step="any">
-                    </div>
-                    <div class="col-md-2">
-                        <label for="lon_error" class="form-label">允许的经度误差</label>
-                        <input type="number" class="form-control" id="lon_error" name="lon_error" value="10" step="any">
-                    </div>
-                    <div class="col-md-2">
-                        <label for="start_time" class="form-label">开始时间</label>
-                        <input type="datetime-local" class="form-control" id="start_time" name="start_time" value="2024-10-21T21:50" required>
-                    </div>
-                    <div class="col-md-2">
-                        <label for="end_time" class="form-label">结束时间</label>
-                        <input type="datetime-local" class="form-control" id="end_time" name="end_time" value="2024-10-21T21:55" required>
-                    </div>
-                    <div class="col-md-2">
-                        <label for="search_interval" class="form-label">查找间隔时间 (秒)</label>
-                        <input type="number" class="form-control" id="search_interval" name="search_interval" value="60" required min="1">
-                    </div>
                 </div>
             </div>
 
-            <!-- 第二组参数：卫星参数 -->
+            <!-- 第二组参数：卫星选择 -->
             <div class="parameter-section">
+                <span class="section-title">卫星选择</span>
                 <div class="row g-2">
-                    <div class="col-md-3">
+                    <div class="col-md-12">
                         <label for="satellite" class="form-label">卫星</label>
                         <select class="form-select" id="satellite" name="satellite" required>
                             <!-- 卫星选项将通过JavaScript动态填充 -->
                         </select>
-                    </div>
-                    <div class="col-md-2">
-                        <label for="sat_lat" class="form-label">卫星纬度</label>
-                        <input type="text" class="form-control" id="sat_lat" readonly>
-                    </div>
-                    <div class="col-md-2">
-                        <label for="sat_lon" class="form-label">卫星经度</label>
-                        <input type="text" class="form-control" id="sat_lon" readonly>
-                    </div>
-                    <div class="col-md-3">
-                        <label for="found_time" class="form-label">满足条件的时间</label>
-                        <input type="datetime-local" class="form-control" id="found_time">
-                    </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button type="button" id="searchSatelliteBtn" class="btn btn-secondary w-100">查找卫星</button>
                     </div>
                 </div>
             </div>
@@ -288,16 +244,16 @@
                 <span class="section-title">计算参数</span>
                 <div class="row g-2">
                     <div class="col-md-2">
+                        <label for="start_time" class="form-label">开始时间</label>
+                        <input type="datetime-local" class="form-control" id="start_time" name="start_time" value="2024-10-21T21:50" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="end_time" class="form-label">结束时间</label>
+                        <input type="datetime-local" class="form-control" id="end_time" name="end_time" value="2024-10-21T21:55" required>
+                    </div>
+                    <div class="col-md-2">
                         <label for="interval" class="form-label">计算时间间隔 (秒)</label>
                         <input type="number" class="form-control" id="interval" name="interval" value="60" required min="1">
-                    </div>
-                    <div class="col-md-2">
-                        <label for="points_before" class="form-label">当前时刻前点数</label>
-                        <input type="number" class="form-control" id="points_before" name="points_before" value="5" required min="0">
-                    </div>
-                    <div class="col-md-2">
-                        <label for="points_after" class="form-label">当前时刻后点数</label>
-                        <input type="number" class="form-control" id="points_after" name="points_after" value="5" required min="0">
                     </div>
                     <div class="col-md-2">
                         <label for="frequency" class="form-label">频率 (MHz)</label>
@@ -306,7 +262,7 @@
                     <div class="col-md-4">
                         <div class="form-check mt-4">
                             <input class="form-check-input" type="checkbox" id="show_cover" name="show_cover">
-                            <label class="form-check-label" for="show_all">
+                            <label class="form-check-label" for="show_cover">
                                 计算所有卫星
                             </label>
                         </div>
@@ -358,7 +314,7 @@
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">加载中...</span>
             </div>
-            <span class="ms-2">计算���，请稍候...</span>
+            <span class="ms-2">计算中，请稍候...</span>
         </div>
 
         <div id="error" class="mt-3 alert alert-danger" style="display: none;"></div>
@@ -528,6 +484,23 @@
             // 设置默认选中的星座
             constellationSelect.value = 'iridium';
 
+            // 设置默认时间（当前时间和1小时后）
+            const now = new Date();
+            const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+            
+            // 格式化为datetime-local格式 YYYY-MM-DDTHH:mm
+            const formatDateTime = (date) => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                return `${year}-${month}-${day}T${hours}:${minutes}`;
+            };
+            
+            document.getElementById('start_time').value = formatDateTime(now);
+            document.getElementById('end_time').value = formatDateTime(oneHourLater);
+
             // 初始化时延迟加载卫星列表
             setTimeout(() => {
                 updateTLEAndSatelliteList(constellationSelect.value);
@@ -572,25 +545,12 @@
                 // 开始轮询进度
                 startProgressPolling();
 
-                // 修改时间解析逻辑
-                let foundTimeValue = document.getElementById('found_time').value;
-                let foundTime;
-                if (foundTimeValue) {
-                    // datetime-local格式为 "YYYY-MM-DDTHH:mm"
-                    foundTime = luxon.DateTime.fromISO(foundTimeValue);
-                } else {
-                    // 如果没有设置时间，使用当前时间
-                    foundTime = luxon.DateTime.now();
-                }
+                // 直接使用用户输入的开始和结束时间
+                let startTime = luxon.DateTime.fromISO(document.getElementById('start_time').value);
+                let endTime = luxon.DateTime.fromISO(document.getElementById('end_time').value);
                 let interval = parseInt(document.getElementById('interval').value);
-                let pointsBefore = parseInt(document.getElementById('points_before').value);
-                let pointsAfter = parseInt(document.getElementById('points_after').value);
                 const showAllSatellites = document.getElementById('show_cover').checked;
                 const constellation = document.getElementById('satelliteConstellation').value;
-
-                // 计算开始和结束时间
-                let startTime = foundTime.minus({ seconds: interval * pointsBefore });
-                let endTime = foundTime.plus({ seconds: interval * pointsAfter });
 
                 const userPosition = getUserPosition();
 
@@ -607,8 +567,6 @@
                         start_time: startTime.toISO(),
                         end_time: endTime.toISO(),
                         interval: interval,
-                        points_before: pointsBefore,
-                        points_after: pointsAfter,
                         show_cover: showAllSatellites,
                         frequency: parseFloat(document.getElementById('frequency').value),
                         constellation: constellation
@@ -833,92 +791,6 @@
                     }
                 `)
                 .appendTo('head');
-
-            // 修改查找卫星按钮的事件监听器
-            document.getElementById('searchSatelliteBtn').addEventListener('click', function() {
-                console.log('开始查找卫星...');
-                
-                // 显示加载状态
-                const button = this;
-                button.disabled = true;
-                button.innerHTML = '查找中...';
-                
-                let startTime = new Date(document.getElementById('start_time').value + 'Z');
-                let endTime = new Date(document.getElementById('end_time').value + 'Z');
-                let selectedConstellation = document.getElementById('satelliteConstellation').value;
-
-                const searchData = {
-                    lat_ue: parseFloat(document.getElementById('lat_ue').value),
-                    lon_ue: parseFloat(document.getElementById('lon_ue').value),
-                    alt_ue: parseFloat(document.getElementById('alt_ue').value),
-                    delta_lat: parseFloat(document.getElementById('delta_lat').value) || 0,
-                    delta_lon: parseFloat(document.getElementById('delta_lon').value) || 0,
-                    start_time: startTime.toISOString(),
-                    end_time: endTime.toISOString(),
-                    search_interval: parseInt(document.getElementById('search_interval').value),
-                    lat_error: parseFloat(document.getElementById('lat_error').value) || null,
-                    lon_error: parseFloat(document.getElementById('lon_error').value) || null,
-                    constellation: selectedConstellation
-                };
-
-                console.log('发送的搜索参数:', searchData);
-
-                fetch('/search_satellite', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(searchData)
-                })
-                .then(response => {
-                    console.log('收到服务器响应:', response.status);
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('收到的数据:', data);
-                    if (data.satellite) {
-                        document.getElementById('satellite').value = data.satellite;
-                        document.getElementById('sat_lat').value = data.lat_sat ? data.lat_sat.toFixed(4) : 'N/A';
-                        document.getElementById('sat_lon').value = data.lon_sat ? data.lon_sat.toFixed(4) : 'N/A';
-                        // 设置找到的时间，转换为datetime-local格式
-                        document.getElementById('found_time').value = luxon.DateTime.fromISO(data.time).toFormat('yyyy-MM-dd\'T\'HH:mm');
-                    } else {
-                        alert('未找到满足条件的卫星');
-                    }
-                })
-                .catch((error) => {
-                    console.error('查找卫星时发生错误:', error);
-                    alert('查找卫星过程中发生错误，请检查输入并重试。\n错误信息: ' + error.message);
-                })
-                .finally(() => {
-                    // 恢复按钮状态
-                    button.disabled = false;
-                    button.innerHTML = '查找卫星';
-                });
-            });
-
-            // const positionSource = document.getElementById('position-source');
-            // const latInput = document.getElementById('lat_ue');
-            // const lonInput = document.getElementById('lon_ue');
-
-            // positionSource.addEventListener('change', function() {
-            //     if (this.value === 'browser') {
-            //         if ("geolocation" in navigator) {
-            //             navigator.geolocation.getCurrentPosition(function(position) {
-            //                 latInput.value = position.coords.latitude.toFixed(6);
-            //                 lonInput.value = position.coords.longitude.toFixed(6);
-            //             }, function(error) {
-            //                 console.error("获取用户位置失败:", error);
-            //                 alert("无法获取浏览器地理置，请手动输入或选择查找卫星参数。");
-            //             });
-            //         } else {
-            //             alert("您的浏览器不支持地理位置功能，请手动输入或选择查找卫星参数。");
-            //         }
-            //     }
-            // });
 
             function getUserPosition() {
                 return {

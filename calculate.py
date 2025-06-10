@@ -166,55 +166,6 @@ def calculate_doppler(lat_ue, lon_ue, alt_ue, lat_sat1, lon_sat1, alt_sat1, lat_
     
     return v_relative, doppler_shift
 
-def search_target_satellite(lat_ue, lon_ue, alt_ue, satellite_name, start_time, end_time, interval, lat_error, lon_error, show_cover):
-    ts = load.timescale()
-    satellites = load.tle_file('satellite.tle')
-    satellite = next((sat for sat in satellites if sat.name == satellite_name), None)
-    
-    if not satellite:
-        return {"error": "卫星未找到"}
-
-    results = []
-    current_time = start_time
-    
-    while current_time <= end_time:
-        t = ts.from_datetime(current_time)
-        geocentric = satellite.at(t)
-        subpoint = wgs84.subpoint(geocentric)
-        
-        lat_sat = subpoint.latitude.degrees
-        lon_sat = subpoint.longitude.degrees
-        alt_sat = subpoint.elevation.km
-        
-        # 检查卫星是否在允许的误差范围内
-        if (abs(lat_sat - lat_ue) <= lat_error) and (abs(lon_sat - lon_ue) <= lon_error):
-            # 计算其他参数
-            distance, alpha, beta, beta_shuiping = calculate_parameters(lat_ue, lon_ue, alt_ue, lat_sat, lon_sat, alt_sat)
-            direction_angle = calculate_direction_angle(lat_ue, lon_ue, lat_sat, lon_sat)
-            relative_velocity, doppler_shift = calculate_doppler(satellite, t, lat_ue, lon_ue, alt_ue)
-            
-            results.append({
-                "time": current_time.isoformat(),
-                "lat_sat": lat_sat,
-                "lon_sat": lon_sat,
-                "alt_sat": alt_sat,
-                "distance": distance,
-                "alpha": alpha,
-                "beta": beta,
-                "beta_shuiping": beta_shuiping,
-                "direction_angle": direction_angle,
-                "relative_velocity": relative_velocity,
-                "doppler_shift": doppler_shift
-            })
-        
-        current_time += timedelta(seconds=interval)
-    
-    if show_cover:
-        coverage = calculate_coverage(satellite, start_time, lat_ue, lon_ue)
-        return {"results": results, "coverage": coverage}
-    else:
-        return {"results": results}
-
 def calculate_coverage(satellite, time, lat_ue, lon_ue):
     ts = load.timescale()
     t = ts.from_datetime(time)
@@ -232,32 +183,6 @@ def calculate_coverage(satellite, time, lat_ue, lon_ue):
         coverage_points.append({"lat": lat, "lon": lon})
     
     return coverage_points
-
-def find_satellite(satellites, lat_ue, lon_ue, alt_ue, delta_lat, delta_lon, start_time, end_time, search_interval, lat_error, lon_error):
-    target_lat = lat_ue + delta_lat
-    target_lon = lon_ue + delta_lon
-
-    for satellite in satellites:
-        current_time = start_time
-        while current_time <= end_time:
-            t = ts.from_datetime(current_time)
-            geocentric = satellite.at(t)
-            subpoint = wgs84.subpoint(geocentric)
-            
-            lat_sat = subpoint.latitude.degrees
-            lon_sat = subpoint.longitude.degrees
-            
-            if (abs(lat_sat - target_lat) <= lat_error) and (abs(lon_sat - target_lon) <= lon_error):
-                return {
-                    "satellite": satellite.name.strip(),
-                    "time": current_time.isoformat(),
-                    "lat_sat": lat_sat,
-                    "lon_sat": lon_sat
-                }
-            
-            current_time += timedelta(seconds=search_interval)
-    
-    return {}  # 如果没有找到满足条件的卫星
 
 @calculate_app.route('/calculate', methods=['POST'])
 def calculate():
@@ -370,37 +295,6 @@ def get_satellites():
         satellites = load_tle_data()
     sat_names = get_satellite_names(satellites)
     return jsonify(sat_names)
-
-@calculate_app.route('/search_satellite', methods=['POST'])
-def search_satellite():
-    data = request.json
-    constellation = data.get('constellation', 'IRIDIUM')
-    logging.info(f"搜索卫星: 星座 {constellation}")
-    
-    satellites = load_tle_data(constellation)
-    
-    if not satellites:
-        logging.error(f"无法加载 {constellation} 的 TLE 数据")
-        return jsonify({"error": f"无法加载 {constellation} 的 TLE 数据"}), 400
-
-    logging.info(f"成功加载 {constellation} 的 TLE 数据，卫星数量: {len(satellites)}")
-    
-    result = find_satellite(
-        satellites,  # 传递加载的卫星数据
-        data['lat_ue'], data['lon_ue'], data['alt_ue'],
-        data['delta_lat'], data['delta_lon'],
-        datetime.fromisoformat(data['start_time'].replace('Z', '+00:00')),
-        datetime.fromisoformat(data['end_time'].replace('Z', '+00:00')),
-        data['search_interval'],
-        data['lat_error'], data['lon_error']
-    )
-    
-    if result:
-        logging.info(f"找到卫星: {result['satellite']}")
-    else:
-        logging.info("未找到符合条件的卫星")
-    
-    return jsonify(result)
 
 def clear_satellite_cache(constellation=None):
     global satellite_cache
