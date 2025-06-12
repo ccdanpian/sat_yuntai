@@ -347,13 +347,13 @@ button:disabled {
     margin: 0;
 }
 
-/* 调试模式样式 */
+/* 调试日志区域样式 */
 #debugLogSection {
-    margin-top: 20px;
+    display: none;
     background: rgba(0, 0, 0, 0.5);
     border-radius: 10px;
     padding: 20px;
-    display: none;
+    margin-top: 20px;
 }
 
 #debugLogSection h3 {
@@ -362,17 +362,18 @@ button:disabled {
 }
 
 #debugLog {
-    background: #000;
-    color: #0f0;
-    font-family: 'Courier New', monospace;
-    font-size: 12px;
-    padding: 10px;
+    background: rgba(0, 0, 0, 0.7);
     border-radius: 5px;
+    padding: 15px;
     height: 200px;
     overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
     white-space: pre-wrap;
-    border: 1px solid #333;
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
+
+
 
 /* 响应式设计 */
 @media (max-width: 768px) {
