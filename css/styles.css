@@ -1,0 +1,408 @@
+/* 卫星跟踪云台控制系统样式表 */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Microsoft YaHei', Arial, sans-serif;
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    color: #fff;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    padding: 30px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 2.5em;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.control-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-bottom: 30px;
+}
+
+.panel {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.panel h3 {
+    margin-bottom: 15px;
+    color: #ffd700;
+    font-size: 1.3em;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group-inline {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.form-group-inline > div {
+    flex: 1;
+}
+
+.form-group-inline label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.form-group-inline input {
+    width: 100%;
+    padding: 8px;
+    border: none;
+    border-radius: 5px;
+    font-size: 12px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #333;
+}
+
+.location-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.location-controls select {
+    flex: 2;
+}
+
+.location-controls button {
+    flex: 1;
+    margin: 0;
+    padding: 8px;
+    font-size: 12px;
+}
+
+.btn-small {
+    padding: 6px 12px;
+    font-size: 11px;
+    margin: 0 2px;
+}
+
+/* 对话框样式 */
+dialog {
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    min-width: 300px;
+}
+
+dialog::backdrop {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+dialog h3 {
+    margin-top: 0;
+    color: #ffd700;
+}
+
+dialog .form-group {
+    margin-bottom: 15px;
+}
+
+dialog label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+dialog input {
+    width: 100%;
+    padding: 8px;
+    border: none;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #333;
+}
+
+dialog .dialog-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+dialog button {
+    flex: 1;
+    margin: 0;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+select, input, button {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    font-size: 14px;
+}
+
+select, input {
+    background: rgba(255, 255, 255, 0.9);
+    color: #333;
+}
+
+button {
+    background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+    color: white;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    margin-top: 10px;
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+button:disabled {
+    background: #666;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.status {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.status h3 {
+    color: #4ecdc4;
+    margin-bottom: 10px;
+}
+
+.visualization {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+}
+
+.status-display {
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.status-display h3 {
+    color: #4ecdc4;
+    margin-bottom: 15px;
+    font-size: 1.3em;
+}
+
+.status-item {
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.1);
+    border-left: 4px solid #4ecdc4;
+}
+
+.status-item.error {
+    border-left-color: #ff6b6b;
+    background: rgba(255, 107, 107, 0.1);
+}
+
+.status-item.warning {
+    border-left-color: #ffd700;
+    background: rgba(255, 215, 0, 0.1);
+}
+
+.status-item.success {
+    border-left-color: #4ecdc4;
+    background: rgba(78, 205, 196, 0.1);
+}
+
+.gimbal-display {
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+}
+
+.radar-display {
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+}
+
+#radarCanvas {
+    border: 2px solid #4ecdc4;
+    border-radius: 10px;
+    background: #000;
+}
+
+.gimbal-visual {
+    width: 200px;
+    height: 200px;
+    margin: 0 auto;
+    position: relative;
+    border: 2px solid #4ecdc4;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(78, 205, 196, 0.1) 0%, rgba(78, 205, 196, 0.3) 100%);
+}
+
+.gimbal-pointer {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 4px;
+    height: 80px;
+    background: #ff6b6b;
+    transform-origin: bottom center;
+    transform: translate(-50%, -100%) rotate(0deg);
+    transition: transform 0.5s ease;
+}
+
+.angle-display {
+    margin-top: 15px;
+    font-size: 1.1em;
+}
+
+.log {
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 10px;
+    padding: 20px;
+    height: 300px;
+    overflow-y: auto;
+}
+
+.log-entry {
+    margin-bottom: 5px;
+    padding: 5px;
+    border-left: 3px solid #4ecdc4;
+    padding-left: 10px;
+}
+
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.checkbox-group input[type="checkbox"] {
+    width: auto;
+}
+
+.progress {
+    width: 100%;
+    height: 20px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-top: 10px;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #4ecdc4, #44a08d);
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.gimbal-direction-group {
+    align-items: center;
+    gap: 15px;
+}
+
+.gimbal-direction-label {
+    font-size: 16px;
+    font-weight: 600;
+    color: #4ecdc4;
+    text-shadow: 0 0 10px rgba(78, 205, 196, 0.3);
+    margin: 0;
+}
+
+/* 调试模式样式 */
+#debugLogSection {
+    margin-top: 20px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 10px;
+    padding: 20px;
+    display: none;
+}
+
+#debugLogSection h3 {
+    color: #ffd700;
+    margin-bottom: 15px;
+}
+
+#debugLog {
+    background: #000;
+    color: #0f0;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    padding: 10px;
+    border-radius: 5px;
+    height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    border: 1px solid #333;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .control-panel {
+        grid-template-columns: 1fr;
+    }
+    
+    .visualization {
+        grid-template-columns: 1fr;
+    }
+    
+    .form-group-inline {
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    .location-controls {
+        flex-direction: column;
+    }
+    
+    .location-controls select,
+    .location-controls button {
+        flex: none;
+    }
+    
+    h1 {
+        font-size: 2em;
+    }
+    
+    .container {
+        padding: 15px;
+    }
+}
