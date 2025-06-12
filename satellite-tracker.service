@@ -1,0 +1,50 @@
+[Unit]
+Description=Satellite Tracking Gimbal Control System
+Documentation=https://github.com/your-repo/satellite-tracker
+After=network.target
+Wants=network.target
+
+[Service]
+# 服务类型
+Type=simple
+
+# 用户和组
+User=pi
+Group=pi
+
+# 工作目录
+WorkingDirectory=/home/pi/satellite-tracker
+
+# 执行命令
+ExecStart=/usr/bin/python3 /home/pi/satellite-tracker/server.py
+ExecReload=/bin/kill -HUP $MAINPID
+
+# 重启策略
+Restart=always
+RestartSec=10
+
+# 环境变量
+Environment=PYTHONUNBUFFERED=1
+Environment=FLASK_ENV=production
+
+# 标准输出和错误输出
+StandardOutput=journal
+StandardError=journal
+
+# 安全设置
+NoNewPrivileges=true
+
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# 超时设置
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+# 进程管理
+KillMode=mixed
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
