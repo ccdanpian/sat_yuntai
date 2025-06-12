@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛰️ 卫星跟踪云台控制系统</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="control-panel">
+            <div class="panel">
+                <h3>📡 星历下载与卫星选择</h3>
+                
+                <div class="form-group">
+                    <label for="constellation">选择星座:</label>
+                    <select id="constellation">
+                        <option value="">请选择星座</option>
+                        <option value="gps">GPS</option>
+                        <option value="glonass">GLONASS</option>
+                        <option value="galileo">Galileo</option>
+                        <option value="beidou">北斗</option>
+                        <option value="starlink">星链</option>
+                        <option value="starlink_dtc">星链DTC</option>
+                        <option value="oneweb">OneWeb</option>
+                        <option value="iridium">铱星</option>
+                        <option value="globalstar">全球星</option>
+                        <option value="x2" selected>X2星座</option>
+                    </select>
+                </div>
+                
+                <div class="checkbox-group">
+                    <input type="checkbox" id="saveToFile">
+                    <label for="saveToFile">保存到本地文件</label>
+                </div>
+                
+                <div class="progress" id="downloadProgress" style="display: none;">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="satellite">选择卫星:</label>
+                    <select id="satellite" disabled>
+                        <option value="">请先下载星历数据</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h3>🌍 地面站配置</h3>
+                
+                <div class="location-controls">
+                    <select id="locationSelect">
+                        <option value="">选择预设位置...</option>
+                    </select>
+                    <button type="button" id="addLocationBtn" class="btn-small">添加位置</button>
+                    <button type="button" id="clearLocationsBtn" class="btn-small">清除全部</button>
+                </div>
+                
+                <div class="form-group-inline">
+                    <div>
+                        <label for="latitude">纬度 (度):</label>
+                        <input type="number" id="latitude" step="0.000001" placeholder="39.0742" value="39.0742">
+                    </div>
+                    <div>
+                        <label for="longitude">经度 (度):</label>
+                        <input type="number" id="longitude" step="0.000001" placeholder="116.0185" value="116.0785">
+                    </div>
+                    <div>
+                        <label for="altitude">海拔 (米):</label>
+                        <input type="number" id="altitude" placeholder="50" value="50">
+                    </div>
+                </div>
+                
+                <div class="checkbox-group">
+                    <input type="checkbox" id="simulationMode">
+                        <label for="simulationMode">强制时间模式</label>
+                </div>
+                
+                <div class="form-group" id="simulationTime" style="display: none;">
+                        <label for="startTime">指定开始时间:</label>
+                    <input type="datetime-local" id="startTime">
+                </div>
+                
+                <div class="form-group-inline gimbal-direction-group">
+                    <div>
+                        <select id="gimbalDirection">
+                            <option value="auto">自动检测</option>
+                            <option value="north" selected>朝北</option>
+                            <option value="south">朝南</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="gimbalDirection" class="gimbal-direction-label">云台朝向</label>
+                    </div>
+                </div>
+                
+                <button id="controlBtn" disabled>开始跟踪卫星</button>
+                <button id="stopBtn" disabled>停止跟踪</button>
+            </div>
+        </div>
+        
+        <div class="visualization">
+            <div class="status-display">
+                <h3>📊 当前状态</h3>
+                <div id="statusContainer">
+                    <div class="status-item" id="satelliteStatus">🛰️ 加载卫星</div>
+                    <div class="status-item error" id="gimbalStatus">🔧 云台初始化失败</div>
+                    <div class="status-item" id="trajectoryStatus">🔍 搜索轨迹</div>
+                    <div class="status-item" id="calculationStatus">📐 计算云台朝向建议</div>
+                    <div class="status-item" id="trackingStatus">✅ 跟踪正常</div>
+                    <div class="status-item warning" id="simulationStatus" style="display: none;">⚠️ 当前为模拟运行</div>
+                </div>
+            </div>
+            
+            <div class="gimbal-display">
+                <h3>🎯 云台指向</h3>
+                <div class="gimbal-visual" style="margin-top: 15px;">
+                    <div class="gimbal-pointer" id="gimbalPointer"></div>
+                </div>
+                <div class="angle-display">
+                    <div>方位角: <span id="azimuthDisplay">0°</span></div>
+                    <div>仰角: <span id="elevationDisplay">0°</span></div>
+                </div>
+            </div>
+            
+            <div class="panel" id="radarPanel">
+                <canvas id="radarCanvas" width="400" height="400"></canvas>
+                <p id="radarInfo">外圈: 0°仰角 (地平线) | 内圈: 90°仰角 (天顶)</p>
+                <div id="trajectoryInfo" style="margin-top: 10px;">
+                    <p id="maxElevationDisplay"></p>
+                    <p id="actualStartTimeDisplay"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 添加位置对话框 -->
+    <dialog id="addLocationDialog">
+        <h3>📍 添加新位置</h3>
+        <form id="addLocationForm">
+            <div class="form-group">
+                <label for="locationName">位置名称:</label>
+                <input type="text" id="locationName" placeholder="例: 北京天安门" required>
+            </div>
+            <div class="form-group">
+                <label for="dialogLatitude">纬度 (度):</label>
+                <input type="number" id="dialogLatitude" step="0.000001" placeholder="例: 39.0742" required>
+            </div>
+            <div class="form-group">
+                <label for="dialogLongitude">经度 (度):</label>
+                <input type="number" id="dialogLongitude" step="0.000001" placeholder="例: 116.0185" required>
+            </div>
+            <div class="form-group">
+                <label for="dialogAltitude">海拔高度 (米):</label>
+                <input type="number" id="dialogAltitude" placeholder="例: 50" value="0">
+            </div>
+            <div class="dialog-buttons">
+                <button type="button" id="cancelLocationBtn">取消</button>
+                <button type="submit" id="saveLocationBtn">保存</button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- 调试日志区域（仅在debug模式下显示） -->
+    <div id="debugLogSection">
+        <h3>🐛 调试日志</h3>
+        <div id="debugLog"></div>
+    </div>
+
+    <!-- 外部依赖 -->
+    <!-- <script src="https://unpkg.com/satellite.js/dist/satellite.min.js"></script> -->
+    
+    <!-- 模块化JavaScript文件 -->
+    <script src="js/EphemerisManager.js"></script>
+    <script src="js/TrackingController.js"></script>
+    <script src="js/RadarDisplay.js"></script>
+    <script src="js/UIManager.js"></script>
+    <script src="js/LocationManager.js"></script>
+    <script src="js/StatusManager.js"></script>
+    <script src="js/SatelliteTracker.js"></script>
+    
+    <!-- 主应用入口 -->
+    <script src="app.js"></script>
+</body>
+</html>
