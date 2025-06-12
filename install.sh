@@ -262,14 +262,14 @@ configure_firewall() {
     print_info "配置防火墙..."
     
     if command -v ufw &> /dev/null; then
-        sudo ufw allow 5000/tcp
+        sudo ufw allow 15000/tcp
         print_success "UFW防火墙配置完成"
     elif command -v firewall-cmd &> /dev/null; then
-        sudo firewall-cmd --permanent --add-port=5000/tcp
+        sudo firewall-cmd --permanent --add-port=15000/tcp
         sudo firewall-cmd --reload
         print_success "firewalld防火墙配置完成"
     else
-        print_warning "未检测到防火墙，请手动开放5000端口"
+        print_warning "未检测到防火墙，请手动开放15000端口"
     fi
 }
 
@@ -299,7 +299,7 @@ show_completion_info() {
     echo "  2. 系统服务: sudo systemctl start satellite-tracker"
     echo "  3. 开机自启: sudo systemctl enable satellite-tracker"
     echo
-    echo "🌐 访问地址: http://$(hostname -I | awk '{print $1}'):5000"
+    echo "🌐 访问地址: http://$(hostname -I | awk '{print $1}'):15000"
     echo
     echo "📋 常用命令:"
     echo "  查看服务状态: sudo systemctl status satellite-tracker"
