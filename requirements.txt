@@ -1,8 +1,24 @@
-Flask==3.0.0
-Flask-Cors==4.0.1
-Flask-Session==0.8.0
-Flask-SQLAlchemy==3.1.1
-numpy==1.26.4
-requests==2.31.0
-skyfield==1.49
-python-dotenv
+Flask==2.3.3
+Flask-CORS==4.0.0
+
+# Satellite orbit calculation
+skyfield==1.46
+numpy>=1.26.0
+
+# Serial communication
+pyserial==3.5
+
+# Time processing
+python-dateutil==2.8.2
+
+# Mathematical calculation
+scipy>=1.11.4
+
+# Configuration file processing
+PyYAML==6.0.1
+
+# Log processing
+coloredlogs==15.0.1
+
+# System information
+psutil==5.9.5
