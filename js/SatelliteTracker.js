@@ -46,8 +46,9 @@ class SatelliteTracker {
         this.trackingController = new TrackingController(this);
         this.radarDisplay = new RadarDisplay(this);
         this.uiManager = new UIManager(this);
-        this.locationManager = new LocationManager(this);
         this.statusManager = new StatusManager(this);
+        this.locationManager = new LocationManager(this, this.statusManager);
+        this.elevationDataManager = new ElevationDataManager(this);
         
         // 初始化事件监听器
         this.uiManager.initializeEventListeners();
