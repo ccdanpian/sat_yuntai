@@ -3,8 +3,13 @@
  * 负责地面站位置的保存、加载和管理
  */
 class LocationManager {
-    constructor(tracker) {
+    constructor(tracker, statusManager = null) {
         this.tracker = tracker;
+        this.statusManager = statusManager;
+        // 初始化状态变量
+        this.isSaving = false;
+        this.isHiding = false;
+        this.getCurrentLocationBound = false;
     }
     
     // 加载地面站配置
@@ -103,6 +108,12 @@ class LocationManager {
             document.getElementById('dialogLongitude').value = currentLon;
             document.getElementById('dialogAltitude').value = currentAlt;
             // 注意：HTML中没有gimbalDirection的对话框字段，跳过设置
+            
+            // 只在第一次时绑定获取当前位置按钮事件
+            if (!this.getCurrentLocationBound) {
+                this.bindGetCurrentLocationButton();
+                this.getCurrentLocationBound = true;
+            }
         }
     }
     
@@ -111,25 +122,53 @@ class LocationManager {
         const dialog = document.getElementById('addLocationDialog');
         if (dialog) {
             dialog.style.display = 'none';
-            // 清空输入框
-            document.getElementById('locationName').value = '';
-            document.getElementById('dialogLatitude').value = '';
-            document.getElementById('dialogLongitude').value = '';
-            document.getElementById('dialogAltitude').value = '';
+            
+            // 清空表单，但要避免在保存过程中清空
+            if (!this.isHiding && !this.isSaving) {
+                this.isHiding = true;
+                // 使用setTimeout确保在事件处理完成后再清空表单
+                setTimeout(() => {
+                    document.getElementById('locationName').value = '';
+                    document.getElementById('dialogLatitude').value = '';
+                    document.getElementById('dialogLongitude').value = '';
+                    document.getElementById('dialogAltitude').value = '';
+                    this.isHiding = false;
+                }, 0);
+            }
         }
     }
     
     // 保存新位置
     saveNewLocation() {
+        // 防止重复调用
+        if (this.isSaving) {
+            return;
+        }
+        this.isSaving = true;
+        
         const name = document.getElementById('locationName').value.trim();
-        const latitude = document.getElementById('dialogLatitude').value;
-        const longitude = document.getElementById('dialogLongitude').value;
-        const altitude = document.getElementById('dialogAltitude').value;
+        const latitude = document.getElementById('dialogLatitude').value.trim();
+        const longitude = document.getElementById('dialogLongitude').value.trim();
+        const altitude = document.getElementById('dialogAltitude').value.trim();
         // 注意：HTML中没有gimbalDirection的对话框字段，使用默认值
         const gimbalDirection = 'auto';
         
-        if (!name || !latitude || !longitude) {
-            alert('请填写位置名称、纬度和经度');
+        // 更严格的验证
+        if (name.length === 0) {
+            alert('请填写位置名称');
+            this.isSaving = false;
+            return;
+        }
+        
+        if (latitude.length === 0) {
+            alert('请填写纬度');
+            this.isSaving = false;
+            return;
+        }
+        
+        if (longitude.length === 0) {
+            alert('请填写经度');
+            this.isSaving = false;
             return;
         }
         
@@ -138,6 +177,7 @@ class LocationManager {
         const lon = parseFloat(longitude);
         if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
             alert('请输入有效的坐标（纬度: -90到90，经度: -180到180）');
+            this.isSaving = false;
             return;
         }
         
@@ -155,6 +195,7 @@ class LocationManager {
         // 检查是否已存在同名位置
         if (locations.some(loc => loc.name === name)) {
             if (!confirm(`位置 "${name}" 已存在，是否覆盖？`)) {
+                this.isSaving = false;
                 return;
             }
             // 移除旧的同名位置
@@ -178,10 +219,13 @@ class LocationManager {
         // 更新下拉菜单
         this.updateLocationSelect(locations);
         
-        // 隐藏对话框
-        this.hideAddLocationDialog();
-        
         this.tracker.addLog(`已保存位置: ${name}`);
+        
+        // 重置保存状态
+        this.isSaving = false;
+        
+        // 隐藏对话框（放在最后，避免清空表单时触发事件）
+        this.hideAddLocationDialog();
     }
     
     // 清除所有位置
@@ -191,5 +235,96 @@ class LocationManager {
             this.updateLocationSelect([]);
             this.tracker.addLog('已清除所有保存的位置');
         }
+    }
+    
+    // 绑定获取当前位置按钮事件
+    bindGetCurrentLocationButton() {
+        const getCurrentLocationBtn = document.getElementById('getCurrentLocationBtn');
+        if (getCurrentLocationBtn) {
+            // 移除之前的事件监听器（如果有的话）
+            getCurrentLocationBtn.replaceWith(getCurrentLocationBtn.cloneNode(true));
+            const newBtn = document.getElementById('getCurrentLocationBtn');
+            
+            newBtn.addEventListener('click', () => {
+                this.getCurrentLocation();
+            });
+        }
+    }
+    
+    // 获取当前位置
+    getCurrentLocation() {
+        const btn = document.getElementById('getCurrentLocationBtn');
+        
+        if (!navigator.geolocation) {
+            const message = '您的浏览器不支持地理位置功能';
+            if (this.statusManager) {
+                this.statusManager.showStatus(message, 'error');
+            } else {
+                alert(message);
+            }
+            return;
+        }
+        
+        // 更新按钮状态
+        btn.disabled = true;
+        btn.textContent = '🔄 获取中...';
+        
+        const options = {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 60000
+        };
+        
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const lat = position.coords.latitude.toFixed(6);
+                const lon = position.coords.longitude.toFixed(6);
+                const alt = position.coords.altitude ? Math.round(position.coords.altitude) : 0;
+                
+                // 填充输入框
+                document.getElementById('dialogLatitude').value = lat;
+                document.getElementById('dialogLongitude').value = lon;
+                document.getElementById('dialogAltitude').value = alt;
+                
+                // 恢复按钮状态
+                btn.disabled = false;
+                btn.textContent = '📍 获取当前位置';
+                
+                const message = `已获取当前位置: ${lat}, ${lon}`;
+                if (this.statusManager) {
+                    this.statusManager.showStatus(message, 'success');
+                } else {
+                    this.tracker.addLog(message);
+                }
+            },
+            (error) => {
+                // 恢复按钮状态
+                btn.disabled = false;
+                btn.textContent = '📍 获取当前位置';
+                
+                let message = '获取位置失败: ';
+                switch(error.code) {
+                    case error.PERMISSION_DENIED:
+                        message += '用户拒绝了位置请求';
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        message += '位置信息不可用';
+                        break;
+                    case error.TIMEOUT:
+                        message += '请求超时';
+                        break;
+                    default:
+                        message += '未知错误';
+                        break;
+                }
+                
+                if (this.statusManager) {
+                    this.statusManager.showStatus(message, 'error');
+                } else {
+                    alert(message);
+                }
+            },
+            options
+        );
     }
 }
