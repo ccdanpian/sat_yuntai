@@ -54,16 +54,32 @@ class UIManager {
         });
         
         // 清除所有位置按钮
+        const clearLocationsBtn = document.getElementById('clearLocationsBtn');
+        // 先移除可能存在的旧事件监听器
+        const newClearBtn = clearLocationsBtn.cloneNode(true);
+        clearLocationsBtn.parentNode.replaceChild(newClearBtn, clearLocationsBtn);
+        
         document.getElementById('clearLocationsBtn').addEventListener('click', () => {
             this.tracker.locationManager.clearAllLocations();
         });
         
-        // 保存新位置按钮
-        document.getElementById('saveLocationBtn').addEventListener('click', () => {
+        // 监听表单提交事件（包括保存按钮点击）
+        const addLocationForm = document.getElementById('addLocationForm');
+        // 先移除可能存在的旧事件监听器
+        const newForm = addLocationForm.cloneNode(true);
+        addLocationForm.parentNode.replaceChild(newForm, addLocationForm);
+        
+        document.getElementById('addLocationForm').addEventListener('submit', (e) => {
+            e.preventDefault();
             this.tracker.locationManager.saveNewLocation();
         });
         
         // 取消添加位置按钮
+        const cancelLocationBtn = document.getElementById('cancelLocationBtn');
+        // 先移除可能存在的旧事件监听器
+        const newCancelBtn = cancelLocationBtn.cloneNode(true);
+        cancelLocationBtn.parentNode.replaceChild(newCancelBtn, cancelLocationBtn);
+        
         document.getElementById('cancelLocationBtn').addEventListener('click', () => {
             this.tracker.locationManager.hideAddLocationDialog();
         });
