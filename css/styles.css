@@ -107,17 +107,7 @@ h1 {
 
 /* 对话框样式 */
 dialog {
-    border: none;
-    border-radius: 10px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 20px;
-    min-width: 300px;
-    position: fixed;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    margin: 0;
+    /* 基础样式由内联样式控制 */
 }
 
 dialog::backdrop {
@@ -157,6 +147,39 @@ dialog .dialog-buttons {
 dialog button {
     flex: 1;
     margin: 0;
+}
+
+/* 获取当前位置按钮样式 */
+.get-location-btn {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 8px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 8px;
+    margin-bottom: 0;
+    width: auto;
+    display: inline-block;
+}
+
+.get-location-btn:hover {
+    background: linear-gradient(45deg, #218838, #1ea085);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+.get-location-btn:active {
+    transform: translateY(0);
+}
+
+.get-location-btn:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 }
 
 label {
@@ -410,5 +433,11 @@ button:disabled {
     
     .container {
         padding: 15px;
+    }
+    
+    .get-location-btn {
+        padding: 10px 15px;
+        font-size: 14px;
+        margin-top: 10px;
     }
 }
