@@ -1,149 +1,126 @@
 /**
- * UI管理模块
- * 负责用户界面的事件监听和交互处理
+ * 卫星跟踪器主类
+ * 负责协调各个模块的工作
  */
-class UIManager {
-    constructor(tracker) {
-        this.tracker = tracker;
+class SatelliteTracker {
+    constructor() {
+        this.satellites = [];
+        this.isTracking = false;
+        this.lastTrajectoryPoints = null;
+        this.forceTimeInterval = null;
+        this.currentForceTime = null;
+        this.forceTimeStartTime = null;
+        this.trackingInterval = null;
+        this.positionUpdateInterval = null;
+        this.currentAzimuth = 0;
+        this.currentElevation = 0;
+        this.azimuthHistory = [];
+        this.elevationHistory = [];
+        this.groundStationConfig = null;
+        this.savedLocations = {};
+        
+        // 检查是否开启debug模式
+        const urlParams = new URLSearchParams(window.location.search);
+        this.debugMode = urlParams.get('debug') === '1';
+        
+        // 星座URL配置
+        this.constellationUrls = {
+            'gps': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=gps-ops&FORMAT=tle',
+            'glonass': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=glonass-ops&FORMAT=tle',
+            'galileo': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=galileo&FORMAT=tle',
+            'beidou': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=beidou&FORMAT=tle',
+            'starlink': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle',
+            'starlink_dtc': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle',
+            'oneweb': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=oneweb&FORMAT=tle',
+            'iridium': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=iridium&FORMAT=tle',
+            'globalstar': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=globalstar&FORMAT=tle',
+            'x2': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
+        };
+        
+        this.initializeModules();
     }
     
-    // 初始化事件监听器
-    initializeEventListeners() {
-        // 星座选择变化
-        document.getElementById('constellation').addEventListener('change', () => {
-            this.tracker.ephemerisManager.autoDownloadOnConstellationChange();
-        });
+    initializeModules() {
+        // 初始化各个模块
+        this.ephemerisManager = new EphemerisManager(this);
+        this.trackingController = new TrackingController(this);
+        this.radarDisplay = new RadarDisplay(this);
+        this.uiManager = new UIManager(this);
+        this.statusManager = new StatusManager(this);
+        this.locationManager = new LocationManager(this, this.statusManager);
+        this.elevationDataManager = new ElevationDataManager(this);
         
-
+        // 初始化事件监听器
+        this.uiManager.initializeEventListeners();
         
-        // 开始跟踪按钮
-        document.getElementById('controlBtn').addEventListener('click', () => {
-            this.tracker.trackingController.startTracking();
-        });
+        // 加载配置
+        this.locationManager.loadGroundStationConfig();
+        this.locationManager.loadSavedLocations();
         
-        // 停止跟踪按钮
-        document.getElementById('stopBtn').addEventListener('click', () => {
-            this.tracker.trackingController.stopTracking();
-        });
+        // 初始化显示
+        this.radarDisplay.drawRadarBackground();
+        this.statusManager.initializeStatusDisplay();
         
-        // 强制时间模式切换
-        document.getElementById('simulationMode').addEventListener('change', () => {
-            this.toggleForceTimeMode();
-        });
+        // 如果是debug模式，显示调试日志区域
+        if (this.debugMode) {
+            const debugLogSection = document.getElementById('debugLogSection');
+            if (debugLogSection) {
+                debugLogSection.style.display = 'block';
+            }
+        }
         
-        // 地面站配置变化
-        ['latitude', 'longitude', 'altitude'].forEach(id => {
-            document.getElementById(id).addEventListener('change', () => {
-                this.tracker.locationManager.saveGroundStationConfig();
-            });
-        });
-        
-        // 云台朝向变化
-        document.getElementById('gimbalDirection').addEventListener('change', () => {
-            this.tracker.locationManager.saveGroundStationConfig();
-        });
-        
-        // 位置选择变化
-        document.getElementById('locationSelect').addEventListener('change', (e) => {
-            this.tracker.locationManager.selectLocation(e.target.value);
-        });
-        
-        // 添加位置按钮
-        document.getElementById('addLocationBtn').addEventListener('click', () => {
-            this.tracker.locationManager.showAddLocationDialog();
-        });
-        
-        // 清除所有位置按钮
-        const clearLocationsBtn = document.getElementById('clearLocationsBtn');
-        // 先移除可能存在的旧事件监听器
-        const newClearBtn = clearLocationsBtn.cloneNode(true);
-        clearLocationsBtn.parentNode.replaceChild(newClearBtn, clearLocationsBtn);
-        
-        document.getElementById('clearLocationsBtn').addEventListener('click', () => {
-            this.tracker.locationManager.clearAllLocations();
-        });
-        
-        // 监听表单提交事件（包括保存按钮点击）
-        const addLocationForm = document.getElementById('addLocationForm');
-        // 先移除可能存在的旧事件监听器
-        const newForm = addLocationForm.cloneNode(true);
-        addLocationForm.parentNode.replaceChild(newForm, addLocationForm);
-        
-        document.getElementById('addLocationForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.tracker.locationManager.saveNewLocation();
-        });
-        
-        // 取消添加位置按钮
-        const cancelLocationBtn = document.getElementById('cancelLocationBtn');
-        // 先移除可能存在的旧事件监听器
-        const newCancelBtn = cancelLocationBtn.cloneNode(true);
-        cancelLocationBtn.parentNode.replaceChild(newCancelBtn, cancelLocationBtn);
-        
-        document.getElementById('cancelLocationBtn').addEventListener('click', () => {
-            this.tracker.locationManager.hideAddLocationDialog();
-        });
-        
-        // 设置默认日期时间
-        this.setDefaultDateTime();
+        // 自动下载x2星座星历数据
+        this.ephemerisManager.autoDownloadX2Ephemeris();
     }
     
-    // 设置默认日期时间
-    setDefaultDateTime() {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        
-        // 使用datetime-local格式
-        const datetimeStr = `${year}-${month}-${day}T${hours}:${minutes}`;
-        
-        const startTimeElement = document.getElementById('startTime');
-        if (startTimeElement) {
-            startTimeElement.value = datetimeStr;
+    // 日志记录方法
+    addLog(message, type = 'info') {
+        // 只有在debug模式下才输出到控制台和界面
+        if (this.debugMode) {
+            const timestamp = new Date().toLocaleTimeString();
+            if (type === 'error') {
+                console.error(`[${timestamp}] ${message}`);
+            } else {
+                console.log(`[${timestamp}] ${message}`);
+            }
+            
+            const logContainer = document.getElementById('logContainer');
+            if (!logContainer) return;
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            
+            logEntry.innerHTML = `<span style="color: #888;">[${timestamp}]</span> ${message}`;
+            
+            if (type === 'error') {
+                logEntry.style.borderLeftColor = '#ff6b6b';
+                logEntry.style.color = '#ffcccb';
+            }
+            
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // 限制日志条数
+            while (logContainer.children.length > 100) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
         }
     }
     
-    // 切换强制时间模式
-    toggleForceTimeMode() {
-        const forceTimeMode = document.getElementById('simulationMode').checked;
-        const simulationTime = document.getElementById('simulationTime');
-        
-        simulationTime.style.display = forceTimeMode ? 'block' : 'none';
-        const input = document.getElementById('startTime');
-        input.disabled = !forceTimeMode;
-        
-        // 设置默认时间为当前时间
-        if (forceTimeMode) {
-            this.setDefaultDateTime();
+    // 状态更新方法
+    updateStatus(message) {
+        const statusText = document.getElementById('statusText');
+        if (statusText) {
+            statusText.textContent = message;
         }
-    }
-    
-    // 清除卫星列表
-    clearSatelliteList() {
-        const satelliteSelect = document.getElementById('satellite');
-        satelliteSelect.innerHTML = '<option value="">请先下载星历数据</option>';
-        this.tracker.addLog('已清除卫星列表');
-    }
-    
-    // 更新云台朝向建议
-    updateGimbalDirectionHint(direction, description) {
-        const hintElement = document.getElementById('gimbalDirectionHint');
-        if (hintElement) {
-            hintElement.textContent = `建议云台朝向: ${direction} (${description})`;
-            hintElement.style.display = 'block';
-            hintElement.style.color = '#4CAF50';
-            hintElement.style.fontWeight = 'bold';
-        }
-    }
-    
-    // 清除云台朝向建议
-    clearGimbalDirectionHint() {
-        const hintElement = document.getElementById('gimbalDirectionHint');
-        if (hintElement) {
-            hintElement.style.display = 'none';
+        
+        if (this.debugMode) {
+            console.log(`[STATUS] ${message}`);
         }
     }
 }
+
+// 初始化应用
+document.addEventListener('DOMContentLoaded', () => {
+    new SatelliteTracker();
+});
