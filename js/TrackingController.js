@@ -94,6 +94,11 @@ class TrackingController {
             // 云台朝向计算完成
             this.tracker.statusManager.updateStatusDisplay('calculationStatus', '✅ 云台朝向计算完成', 'success');
             
+            // 开始收集仰角数据
+            if (this.tracker.elevationDataManager) {
+                this.tracker.elevationDataManager.startCollecting();
+            }
+            
         } catch (error) {
             this.tracker.addLog(`启动跟踪失败: ${error.message}`, 'error');
         }
@@ -127,6 +132,12 @@ class TrackingController {
             this.tracker.statusManager.updateStatusDisplay('trajectoryStatus', '⏳ 等待搜索轨迹', '');
             this.tracker.statusManager.updateStatusDisplay('calculationStatus', '⏳ 等待计算云台朝向', '');
             this.tracker.addLog('跟踪已停止');
+            
+            // 停止收集仰角数据并更新按钮状态
+            if (this.tracker.elevationDataManager) {
+                this.tracker.elevationDataManager.stopCollecting();
+                this.tracker.elevationDataManager.updateDownloadButtonState();
+            }
             
         } catch (error) {
             this.tracker.addLog(`停止跟踪失败: ${error.message}`, 'error');
@@ -205,6 +216,11 @@ class TrackingController {
                 
                 const visiblePoints = filteredPoints.filter(p => p.visible);
                 this.tracker.addLog(`轨迹计算完成: 总计${filteredPoints.length}个点，可见点${visiblePoints.length}个`);
+                
+                // 更新下载按钮状态
+                if (this.tracker.elevationDataManager) {
+                    this.tracker.elevationDataManager.updateDownloadButtonState();
+                }
                 
                 // 分析轨迹并提供朝向建议
                 if (visiblePoints.length > 0) {
@@ -403,6 +419,11 @@ class TrackingController {
     updateGimbalDisplay(azimuth, elevation) {
         this.tracker.currentAzimuth = azimuth;
         this.tracker.currentElevation = elevation;
+        
+        // 收集仰角数据（如果正在跟踪）
+        if (this.tracker.isTracking && this.tracker.elevationDataManager) {
+            this.tracker.elevationDataManager.addDataPoint(azimuth, elevation);
+        }
         
         // 更新云台指针
         const pointer = document.getElementById('gimbalPointer');
