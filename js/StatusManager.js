@@ -27,20 +27,38 @@ class StatusManager {
     }
     
     // 更新状态显示
-    updateStatusDisplay(status) {
-        const elements = {
-            azimuth: document.getElementById('azimuthValue'),
-            elevation: document.getElementById('elevationValue'),
-            distance: document.getElementById('distanceValue'),
-            velocity: document.getElementById('velocityValue'),
-            nextPass: document.getElementById('nextPassValue')
-        };
-        
-        Object.keys(status).forEach(key => {
-            if (elements[key]) {
-                elements[key].textContent = status[key];
+    updateStatusDisplay(elementIdOrStatus, text = null, type = null) {
+        // 如果传入的是对象（旧的调用方式）
+        if (typeof elementIdOrStatus === 'object' && text === null) {
+            const status = elementIdOrStatus;
+            const elements = {
+                azimuth: document.getElementById('azimuthValue'),
+                elevation: document.getElementById('elevationValue'),
+                distance: document.getElementById('distanceValue'),
+                velocity: document.getElementById('velocityValue'),
+                nextPass: document.getElementById('nextPassValue')
+            };
+            
+            Object.keys(status).forEach(key => {
+                if (elements[key]) {
+                    elements[key].textContent = status[key];
+                }
+            });
+        } else {
+            // 新的调用方式：updateStatusDisplay(elementId, text, type)
+            const element = document.getElementById(elementIdOrStatus);
+            if (element) {
+                element.textContent = text;
+                
+                // 移除所有状态类
+                element.classList.remove('error', 'warning', 'success');
+                
+                // 添加新的状态类
+                if (type && type !== '') {
+                    element.classList.add(type);
+                }
             }
-        });
+        }
     }
     
     // 显示云台初始化失败状态
