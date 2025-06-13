@@ -99,10 +99,10 @@ class LocationManager {
             const currentAlt = document.getElementById('altitude').value;
             const currentDir = document.getElementById('gimbalDirection').value;
             
-            document.getElementById('newLocationLat').value = currentLat;
-            document.getElementById('newLocationLon').value = currentLon;
-            document.getElementById('newLocationAlt').value = currentAlt;
-            document.getElementById('newLocationDir').value = currentDir;
+            document.getElementById('dialogLatitude').value = currentLat;
+            document.getElementById('dialogLongitude').value = currentLon;
+            document.getElementById('dialogAltitude').value = currentAlt;
+            // 注意：HTML中没有gimbalDirection的对话框字段，跳过设置
         }
     }
     
@@ -112,21 +112,21 @@ class LocationManager {
         if (dialog) {
             dialog.style.display = 'none';
             // 清空输入框
-            document.getElementById('newLocationName').value = '';
-            document.getElementById('newLocationLat').value = '';
-            document.getElementById('newLocationLon').value = '';
-            document.getElementById('newLocationAlt').value = '';
-            document.getElementById('newLocationDir').value = 'auto';
+            document.getElementById('locationName').value = '';
+            document.getElementById('dialogLatitude').value = '';
+            document.getElementById('dialogLongitude').value = '';
+            document.getElementById('dialogAltitude').value = '';
         }
     }
     
     // 保存新位置
     saveNewLocation() {
-        const name = document.getElementById('newLocationName').value.trim();
-        const latitude = document.getElementById('newLocationLat').value;
-        const longitude = document.getElementById('newLocationLon').value;
-        const altitude = document.getElementById('newLocationAlt').value;
-        const gimbalDirection = document.getElementById('newLocationDir').value;
+        const name = document.getElementById('locationName').value.trim();
+        const latitude = document.getElementById('dialogLatitude').value;
+        const longitude = document.getElementById('dialogLongitude').value;
+        const altitude = document.getElementById('dialogAltitude').value;
+        // 注意：HTML中没有gimbalDirection的对话框字段，使用默认值
+        const gimbalDirection = 'auto';
         
         if (!name || !latitude || !longitude) {
             alert('请填写位置名称、纬度和经度');
