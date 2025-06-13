@@ -610,7 +610,7 @@ def api_calculate_trajectory():
             trajectory_points = []
             end_time = search_start_time + timedelta(hours=12)
             current_time = search_start_time
-            time_step = timedelta(seconds=20)
+            time_step = timedelta(seconds=10)
             
             # print(f"[API] 开始计算轨迹，起始时间: {search_start_time}, 结束时间: {end_time}")
             
