@@ -292,6 +292,8 @@ button:disabled {
     border: 2px solid #4ecdc4;
     border-radius: 10px;
     background: #000;
+    max-width: 100%;
+    height: auto;
 }
 
 .gimbal-visual {
@@ -405,39 +407,234 @@ button:disabled {
 
 /* 响应式设计 */
 @media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+    
+    .container {
+        padding: 15px;
+        margin: 0;
+        border-radius: 10px;
+    }
+    
     .control-panel {
         grid-template-columns: 1fr;
+        gap: 15px;
+        margin-bottom: 20px;
     }
     
     .visualization {
         grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .panel {
+        padding: 15px;
+    }
+    
+    .panel h3 {
+        font-size: 1.1em;
+        margin-bottom: 12px;
     }
     
     .form-group-inline {
         flex-direction: column;
-        gap: 5px;
+        gap: 8px;
+    }
+    
+    .form-group-inline label {
+        font-size: 13px;
+    }
+    
+    .form-group-inline input {
+        padding: 10px;
+        font-size: 14px;
     }
     
     .location-controls {
         flex-direction: column;
+        gap: 8px;
     }
     
     .location-controls select,
     .location-controls button {
         flex: none;
+        width: 100%;
     }
     
     h1 {
-        font-size: 2em;
-    }
-    
-    .container {
-        padding: 15px;
+        font-size: 1.8em;
+        margin-bottom: 20px;
     }
     
     .get-location-btn {
         padding: 10px 15px;
         font-size: 14px;
         margin-top: 10px;
+        width: 100%;
+    }
+    
+    /* 云台显示区域优化 */
+    .gimbal-visual {
+        width: 150px;
+        height: 150px;
+    }
+    
+    .gimbal-pointer {
+        height: 60px;
+    }
+    
+    .angle-display {
+        font-size: 1em;
+        margin-top: 10px;
+    }
+    
+    /* 雷达显示优化 */
+    #radarCanvas {
+        width: 100%;
+        height: auto;
+    }
+    
+    #radarInfo {
+        font-size: 12px;
+        margin-top: 8px;
+    }
+    
+    /* 状态显示优化 */
+    .status-display {
+        padding: 15px;
+    }
+    
+    .status-item {
+        font-size: 13px;
+        padding: 6px 10px;
+        margin-bottom: 8px;
+    }
+    
+    /* 按钮优化 */
+    button {
+        padding: 12px;
+        font-size: 14px;
+        margin-top: 8px;
+    }
+    
+    .btn-small {
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+    
+    /* 表单元素优化 */
+    select, input {
+        padding: 10px;
+        font-size: 14px;
+    }
+    
+    .form-group {
+        margin-bottom: 12px;
+    }
+    
+    label {
+        font-size: 13px;
+        margin-bottom: 4px;
     }
 }
+
+/* 更小屏幕的额外优化 */
+@media (max-width: 480px) {
+    body {
+        padding: 5px;
+    }
+    
+    .container {
+        padding: 10px;
+        border-radius: 8px;
+    }
+    
+    .panel {
+        padding: 12px;
+    }
+    
+    .panel h3 {
+        font-size: 1em;
+        margin-bottom: 10px;
+    }
+    
+    .gimbal-visual {
+        width: 120px;
+        height: 120px;
+    }
+    
+    .gimbal-pointer {
+        height: 45px;
+        width: 3px;
+    }
+    
+    #radarCanvas {
+        width: 100%;
+        height: auto;
+    }
+    
+    .angle-display {
+        font-size: 0.9em;
+    }
+    
+    .status-item {
+        font-size: 12px;
+        padding: 5px 8px;
+    }
+    
+    button {
+        padding: 10px;
+        font-size: 13px;
+    }
+    
+    select, input {
+        padding: 8px;
+        font-size: 13px;
+    }
+    
+    h1 {
+         font-size: 1.5em;
+         margin-bottom: 15px;
+     }
+     
+     /* 对话框移动端优化 */
+     #addLocationDialog {
+         width: 95% !important;
+         max-width: none !important;
+         margin: 10px !important;
+         padding: 15px !important;
+     }
+     
+     #elevationDataDialog {
+         width: 95% !important;
+         max-width: none !important;
+         top: 10px !important;
+         left: 2.5% !important;
+         transform: none !important;
+         height: calc(100vh - 20px) !important;
+         padding: 15px !important;
+     }
+     
+     #elevationChart {
+         height: 200px !important;
+     }
+ }
+ 
+ /* 通用对话框优化 */
+ @media (max-width: 600px) {
+     dialog {
+         width: 95vw !important;
+         max-width: none !important;
+         margin: 5px !important;
+     }
+     
+     .dialog-buttons {
+         flex-direction: column;
+         gap: 10px;
+     }
+     
+     .dialog-buttons button {
+         width: 100%;
+     }
+ }
