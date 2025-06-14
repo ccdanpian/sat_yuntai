@@ -563,13 +563,110 @@ def api_calculate_position():
         print(f"[API ERROR] 位置计算失败: {error_msg}")
         return jsonify({'error': error_msg}), 500
 
+def find_pass_candidates_fast(satellite, ground_station, start_time, search_hours=24):
+    """快速搜索过境候选时间段"""
+    candidates = []
+    current_time = start_time
+    end_time = start_time + timedelta(hours=search_hours)
+    
+    # 粗搜索：3分钟间隔快速扫描
+    coarse_step = timedelta(minutes=3)
+    prev_elevation = None
+    
+    while current_time <= end_time:
+        try:
+            azimuth, elevation = tracker.calculate_satellite_position(
+                satellite, ground_station, current_time, convert_azimuth=False
+            )
+            
+            # 检测仰角变化趋势，寻找过境时间段
+            if prev_elevation is not None:
+                # 如果仰角从负变正或者当前仰角>10度，可能是过境开始
+                if (prev_elevation <= 0 and elevation > 0) or elevation > 10:
+                    # 向前回溯寻找过境开始
+                    pass_start = current_time - timedelta(minutes=15)
+                    pass_end = current_time + timedelta(minutes=15)
+                    candidates.append((pass_start, pass_end))
+                    
+                    # 跳过这个过境时间段，避免重复检测
+                    current_time += timedelta(minutes=20)
+                    prev_elevation = None
+                    continue
+            
+            prev_elevation = elevation
+            current_time += coarse_step
+            
+        except Exception as e:
+            current_time += coarse_step
+            continue
+    
+    return candidates
+
+def calculate_detailed_pass(satellite, ground_station, start_time, end_time):
+    """计算详细过境轨迹"""
+    trajectory_points = []
+    current_time = start_time
+    time_step = timedelta(seconds=10)
+    
+    # 批量计算时间点
+    time_points = []
+    temp_time = current_time
+    while temp_time <= end_time:
+        time_points.append(temp_time)
+        temp_time += time_step
+    
+    # 批量计算位置（利用skyfield的向量化能力）
+    try:
+        ts = tracker.ts
+        t_array = ts.from_datetimes(time_points)
+        difference = satellite - ground_station
+        topocentric = difference.at(t_array)
+        alt, az, distance = topocentric.altaz()
+        
+        # 构建结果点
+        for i, time_point in enumerate(time_points):
+            azimuth = az.degrees[i] if hasattr(az.degrees, '__len__') else az.degrees
+            elevation = alt.degrees[i] if hasattr(alt.degrees, '__len__') else alt.degrees
+            
+            is_visible = bool(elevation > 5)
+            
+            point = {
+                'time': time_point.isoformat(),
+                'azimuth': round(float(azimuth), 3),
+                'elevation': round(float(elevation), 3),
+                'visible': is_visible
+            }
+            trajectory_points.append(point)
+            
+    except Exception as e:
+        # 如果批量计算失败，回退到逐点计算
+        print(f"[DEBUG] 批量计算失败，回退到逐点计算: {e}")
+        for time_point in time_points:
+            try:
+                azimuth, elevation = tracker.calculate_satellite_position(
+                    satellite, ground_station, time_point, convert_azimuth=False
+                )
+                
+                is_visible = bool(elevation > 5)
+                
+                point = {
+                    'time': time_point.isoformat(),
+                    'azimuth': round(azimuth, 3),
+                    'elevation': round(elevation, 3),
+                    'visible': is_visible
+                }
+                trajectory_points.append(point)
+                
+            except Exception as e2:
+                continue
+    
+    return trajectory_points
+
 @app.route('/api/calculate_trajectory', methods=['POST'])
 def api_calculate_trajectory():
-    """计算卫星轨迹API"""
-    # print(f"[API] 收到POST请求: /api/calculate_trajectory")
+    """计算卫星轨迹API - 优化版本"""
     try:
         data = request.get_json()
-        # print(f"[API] 轨迹计算请求数据: {json.dumps(data, indent=2, ensure_ascii=False)}")
         
         # 验证必要参数
         if not data:
@@ -601,108 +698,54 @@ def api_calculate_trajectory():
         # 加载卫星
         satellite = tracker.load_satellite_from_tle(satellite_data)
         
-        # 寻找符合条件的轨迹（最大仰角>=30度）
-        max_search_hours = 12  # 最多搜索48小时
-        search_start_time = start_time
+        print(f"[API] 开始快速搜索过境候选时间段")
         
-        while True:
-            # 计算轨迹（12小时，20秒间隔）
-            trajectory_points = []
-            end_time = search_start_time + timedelta(hours=12)
-            current_time = search_start_time
-            time_step = timedelta(seconds=10)
+        # 第一步：快速搜索过境候选时间段
+        candidates = find_pass_candidates_fast(satellite, ground_station, start_time, 24)
+        
+        if not candidates:
+            print(f"[API] 未找到过境候选时间段")
+            return jsonify({'error': '在24小时内未找到过境候选时间段'}), 404
+        
+        print(f"[API] 找到 {len(candidates)} 个过境候选时间段")
+        
+        # 第二步：对每个候选时间段进行详细计算
+        for i, (pass_start, pass_end) in enumerate(candidates):
+            print(f"[API] 计算候选时间段 {i+1}/{len(candidates)}: {pass_start} - {pass_end}")
             
-            # print(f"[API] 开始计算轨迹，起始时间: {search_start_time}, 结束时间: {end_time}")
+            # 计算详细轨迹
+            trajectory_points = calculate_detailed_pass(satellite, ground_station, pass_start, pass_end)
             
-            point_count = 0
-            while current_time <= end_time:
-                try:
-                    # 计算卫星位置 - 使用convert_azimuth=False获取原始方位角
-                    azimuth, elevation = tracker.calculate_satellite_position(
-                        satellite, ground_station, current_time, convert_azimuth=False
-                    )
-                    
-                    is_visible = bool(elevation > 5)  # 仰角大于5度认为可见
-                    
-                    point = {
-                        'time': current_time.isoformat(),
-                        'azimuth': round(azimuth, 3),  # 使用原始方位角
-                        'elevation': round(elevation, 3),
-                        'visible': is_visible
-                    }
-                    
-                    trajectory_points.append(point)
-                    point_count += 1
-                    
-                    # 每100个点输出一次调试信息（已注释，减少日志输出）
-                    # if point_count % 100 == 0:
-                    #     print(f"[API] 计算进度: {point_count}个点, 当前时间: {current_time}, 方位角: {azimuth:.2f}°, 仰角: {elevation:.2f}°")
-                    
-                except Exception as e:
-                    print(f"[API WARNING] 时间点 {current_time} 计算失败: {e}")
-                    # 继续计算下一个时间点
+            if not trajectory_points:
+                continue
+            
+            # 提取可见点并检查最大仰角
+            visible_points = [p for p in trajectory_points if p['visible']]
+            
+            if not visible_points:
+                continue
                 
-                current_time += time_step
+            max_elevation = max(p['elevation'] for p in visible_points)
             
-            # 识别并处理单个可见过境事件
-            current_pass_points = []
-            found_qualifying_pass_in_window = False
-            for point in trajectory_points:
-                if point['visible']:
-                    current_pass_points.append(point)
-                else:
-                    if current_pass_points: # 可见段结束
-                        pass_max_elevation = max(p['elevation'] for p in current_pass_points)
-                        if pass_max_elevation >= 30.0:
-                            # 找到第一个符合条件的过境事件
-                            actual_pass_start_time = current_pass_points[0]['time']
-                            actual_pass_end_time = current_pass_points[-1]['time']
-                            result = {
-                                'trajectoryPoints': current_pass_points,
-                                'visiblePoints': current_pass_points,
-                                'totalPoints': len(current_pass_points),
-                                'visibleCount': len(current_pass_points),
-                                'maxElevation': round(pass_max_elevation, 2),
-                                'startTime': actual_pass_start_time,
-                                'endTime': actual_pass_end_time,
-                                'actualStartTime': actual_pass_start_time
-                            }
-                            # print(f"[API] 找到符合条件的过境事件并返回: {len(current_pass_points)} 点, Max Elev: {pass_max_elevation:.2f}")
-                            return jsonify(result)
-                        current_pass_points = [] # 重置，继续寻找下一个过境事件
-            
-            # 检查在12小时计算窗口结束时是否仍处于一个可见过境事件中
-            if current_pass_points:
-                pass_max_elevation = max(p['elevation'] for p in current_pass_points)
-                if pass_max_elevation >= 30.0:
-                    # 找到第一个符合条件的过境事件
-                    actual_pass_start_time = current_pass_points[0]['time']
-                    actual_pass_end_time = current_pass_points[-1]['time']
-                    result = {
-                        'trajectoryPoints': current_pass_points,
-                        'visiblePoints': current_pass_points,
-                        'totalPoints': len(current_pass_points),
-                        'visibleCount': len(current_pass_points),
-                        'maxElevation': round(pass_max_elevation, 2),
-                        'startTime': actual_pass_start_time,
-                        'endTime': actual_pass_end_time,
-                        'actualStartTime': actual_pass_start_time
-                    }
-                    # print(f"[API] 找到符合条件的过境事件(窗口末尾)并返回: {len(current_pass_points)} 点, Max Elev: {pass_max_elevation:.2f}")
-                    return jsonify(result)
-
-            # 如果在此12小时窗口内未找到符合条件的过境事件
-            # print(f"[API] 当前12小时窗口无符合条件的过境事件，搜索下一个时间段")
-            search_start_time += timedelta(hours=6)  # 向前搜索6小时
-            if search_start_time > start_time + timedelta(hours=max_search_hours):
-                print(f"[API] 超过最大搜索时间({max_search_hours}小时)，未找到符合条件的轨迹")
-                return jsonify({'error': f'在{max_search_hours}小时内未找到符合条件的轨迹'}), 404
-            # continue 会由外层 while True 自动执行，无需显式调用
+            if max_elevation >= 30.0:
+                # 找到符合条件的过境事件
+                print(f"[API] 找到符合条件的过境事件: 最大仰角 {max_elevation:.2f}°")
                 
-                # 检查是否超过最大搜索时间
-                if search_start_time > start_time + timedelta(hours=max_search_hours):
-                    print(f"[API] 超过最大搜索时间({max_search_hours}小时)，未找到符合条件的轨迹")
-                    return jsonify({'error': f'在{max_search_hours}小时内未找到最大仰角>=30°的轨迹'}), 404
+                result = {
+                    'trajectoryPoints': visible_points,
+                    'visiblePoints': visible_points,
+                    'totalPoints': len(visible_points),
+                    'visibleCount': len(visible_points),
+                    'maxElevation': round(max_elevation, 2),
+                    'startTime': visible_points[0]['time'],
+                    'endTime': visible_points[-1]['time'],
+                    'actualStartTime': visible_points[0]['time']
+                }
+                
+                return jsonify(result)
+        
+        print(f"[API] 所有候选时间段的最大仰角都小于30°")
+        return jsonify({'error': '在24小时内未找到最大仰角>=30°的轨迹'}), 404
     
     except Exception as e:
         error_msg = str(e)
