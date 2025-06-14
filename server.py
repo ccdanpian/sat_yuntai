@@ -732,14 +732,14 @@ def api_calculate_trajectory():
                 print(f"[API] 找到符合条件的过境事件: 最大仰角 {max_elevation:.2f}°")
                 
                 result = {
-                    'trajectoryPoints': trajectory_points,  # 返回所有轨迹点
-                    'visiblePoints': visible_points,       # 可见点
+                    'trajectoryPoints': trajectory_points,  # 返回所有轨迹点（包括不可见点）
+                    'visiblePoints': visible_points,       # 仅可见点
                     'totalPoints': len(trajectory_points),
                     'visibleCount': len(visible_points),
                     'maxElevation': round(max_elevation, 2),
-                    'startTime': trajectory_points[0]['time'],
-                    'endTime': trajectory_points[-1]['time'],
-                    'actualStartTime': visible_points[0]['time']
+                    'startTime': trajectory_points[0]['time'],      # 使用完整轨迹的开始时间
+                    'endTime': trajectory_points[-1]['time'],       # 使用完整轨迹的结束时间
+                    'actualStartTime': visible_points[0]['time']    # 可见部分的开始时间
                 }
                 
                 return jsonify(result)
