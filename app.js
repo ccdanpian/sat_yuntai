@@ -1,9 +1,7 @@
 /**
  * 卫星跟踪应用主入口文件
  * 负责初始化应用
+ * 
+ * 注意：SatelliteTracker的实例化已移至SatelliteTracker.js中
+ * 避免重复实例化导致事件监听器重复绑定
  */
-
-// 当DOM加载完成后初始化应用
-document.addEventListener('DOMContentLoaded', function() {
-    window.satelliteTracker = new SatelliteTracker();
-});
