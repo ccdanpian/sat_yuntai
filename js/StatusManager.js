@@ -89,20 +89,32 @@ class StatusManager {
     async checkGimbalStatus() {
         try {
             const response = await fetch('/api/gimbal_status');
+            const gimbalStatusElement = document.getElementById('gimbalStatus');
+            
             if (response.ok) {
                 const data = await response.json();
                 if (data.status === 'error' || data.status === 'disconnected') {
-                    this.showGimbalFailureStatus();
+                    // 更新状态显示
+                    gimbalStatusElement.textContent = '🔧 云台初始化失败';
+                    gimbalStatusElement.className = 'status-item error';
                     this.updateStatus('云台连接失败，将使用模拟模式');
                 } else {
+                    // 更新状态显示
+                    gimbalStatusElement.textContent = '✅ 云台连接正常';
+                    gimbalStatusElement.className = 'status-item success';
                     this.updateStatus('云台连接正常');
                 }
             } else {
-                this.showGimbalFailureStatus();
+                // 更新状态显示
+                gimbalStatusElement.textContent = '🔧 云台初始化失败';
+                gimbalStatusElement.className = 'status-item error';
                 this.updateStatus('无法获取云台状态，将使用模拟模式');
             }
         } catch (error) {
-            this.showGimbalFailureStatus();
+            // 更新状态显示
+            const gimbalStatusElement = document.getElementById('gimbalStatus');
+            gimbalStatusElement.textContent = '🔧 云台初始化失败';
+            gimbalStatusElement.className = 'status-item error';
             this.updateStatus('云台状态检查失败: ' + error.message);
         }
     }
