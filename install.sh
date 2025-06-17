@@ -197,39 +197,41 @@ create_system_service() {
     VENV_DIR="$HOME/satellite-tracker-venv"
     
     # 创建服务文件
-    cat > satellite-tracker.service << EOL
+    cat > satellite-tracker.service << EOF
 [Unit]
-Description=Satellite Tracker Service
+Description=Satellite Tracking Gimbal Control System
+Documentation=https://github.com/your-repo/satellite-tracker
 After=network.target
+Wants=network.target
 
 [Service]
 Type=simple
 User=$USER
+Group=$USER
 WorkingDirectory=$INSTALL_DIR
-ExecStart=/usr/bin/python3 $INSTALL_DIR/server.py
+ExecStart=$VENV_DIR/bin/python $INSTALL_DIR/server.py
+ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
-RestartSec=3
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+Environment=FLASK_ENV=production
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+LimitNOFILE=65536
+LimitNPROC=4096
+TimeoutStartSec=60
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
 
 [Install]
 WantedBy=multi-user.target
-EOL
+EOF
     
     # 安装服务文件
-    sudo mv satellite-tracker.service /etc/systemd/system/
+    sudo cp satellite-tracker.service /etc/systemd/system/
     sudo systemctl daemon-reload
-    
-    # 启动服务并设置开机自启
-    echo "启动服务并设置开机自启..."
-    sudo systemctl enable satellite-tracker
-    sudo systemctl start satellite-tracker
-    
-    # 检查服务状态
-    echo "检查服务状态..."
-    if systemctl is-active --quiet satellite-tracker; then
-        echo "✅ 服务已成功启动并设置为开机自启"
-    else
-        echo "❌ 服务启动失败，请检查日志: sudo journalctl -u satellite-tracker"
-    fi
     
     print_success "系统服务创建完成"
 }
@@ -290,13 +292,20 @@ run_tests() {
 
 # 显示安装完成信息
 show_completion_info() {
-    echo "🚀 安装完成！"
-    echo "服务已自动启动并设置为开机自启"
-    echo "您可以通过以下方式管理服务："
-    echo "  查看状态: sudo systemctl status satellite-tracker"
+    print_success "安装完成！"
+    echo
+    echo "🚀 启动方式:"
+    echo "  1. 手动启动: ./start_satellite_tracker.sh"
+    echo "  2. 系统服务: sudo systemctl start satellite-tracker"
+    echo "  3. 开机自启: sudo systemctl enable satellite-tracker"
+    echo
+    echo "🌐 访问地址: http://$(hostname -I | awk '{print $1}'):15000"
+    echo
+    echo "📋 常用命令:"
+    echo "  查看服务状态: sudo systemctl status satellite-tracker"
+    echo "  查看日志: sudo journalctl -u satellite-tracker -f"
     echo "  停止服务: sudo systemctl stop satellite-tracker"
-    echo "  重启服务: sudo systemctl restart satellite-tracker"
-    echo "  查看日志: sudo journalctl -u satellite-tracker"
+    echo
     
     if [[ $SYSTEM_TYPE == "raspberry_pi"* ]]; then
         print_warning "请重启系统以使串口配置生效: sudo reboot"
