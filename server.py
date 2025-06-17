@@ -500,7 +500,15 @@ def api_gimbal_status():
     try:
         # 检查云台控制器是否已初始化
         initialized = tracker.gimbal_controller is not None
+        
+        # 返回前端期望的状态格式
+        if initialized:
+            status = 'success'
+        else:
+            status = 'disconnected'
+            
         return jsonify({
+            'status': status,
             'initialized': initialized,
             'simulation_mode': not initialized
         })
@@ -508,7 +516,10 @@ def api_gimbal_status():
     except Exception as e:
         error_msg = str(e)
         print(f"[API ERROR] 获取云台状态失败: {error_msg}")
-        return jsonify({'error': error_msg}), 500
+        return jsonify({
+            'status': 'error',
+            'error': error_msg
+        }), 500
 
 @app.route('/api/get_current_position')
 def api_get_current_position():
