@@ -200,7 +200,7 @@ create_system_service() {
     cat > satellite-tracker.service << EOF
 [Unit]
 Description=Satellite Tracking Gimbal Control System
-Documentation=https://github.com/your-repo/satellite-tracker
+Documentation=https://gitee.com/danbian/sat_yuntai
 After=network.target
 Wants=network.target
 
