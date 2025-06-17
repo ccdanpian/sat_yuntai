@@ -106,6 +106,9 @@ class TrackingController {
     
     async stopTracking() {
         try {
+            this.tracker.addLog('正在停止跟踪并复位云台...', 'info');
+            this.tracker.statusManager.updateStatusDisplay('trackingStatus', '⏹️ 正在停止跟踪', 'warning');
+            
             const response = await fetch('/api/stop_tracking', {
                 method: 'POST'
             });
@@ -127,11 +130,14 @@ class TrackingController {
             document.getElementById('controlBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
             
-            this.tracker.updateStatus('跟踪已停止');
+            // 等待云台复位完成
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            this.tracker.updateStatus('跟踪已停止，云台已复位');
             this.tracker.statusManager.updateStatusDisplay('trackingStatus', '⏹️ 跟踪已停止', 'warning');
             this.tracker.statusManager.updateStatusDisplay('trajectoryStatus', '⏳ 等待搜索轨迹', '');
             this.tracker.statusManager.updateStatusDisplay('calculationStatus', '⏳ 等待计算云台朝向', '');
-            this.tracker.addLog('跟踪已停止');
+            this.tracker.addLog('跟踪已停止，云台已复位到零位');
             
             // 停止收集仰角数据并更新按钮状态
             if (this.tracker.elevationDataManager) {
@@ -141,6 +147,7 @@ class TrackingController {
             
         } catch (error) {
             this.tracker.addLog(`停止跟踪失败: ${error.message}`, 'error');
+            this.tracker.statusManager.updateStatusDisplay('trackingStatus', '❌ 停止跟踪失败', 'error');
         }
     }
     

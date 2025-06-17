@@ -395,6 +395,14 @@ class SatelliteTracker:
         print(f"[DEBUG] 设置跟踪标志为False")
         self.is_tracking = False
         
+        # 云台复位
+        print(f"[INFO] 云台复位中...")
+        try:
+            self.control_gimbal(0, 0)
+            print(f"[INFO] 云台已复位到零位")
+        except Exception as e:
+            print(f"[ERROR] 云台复位失败: {e}")
+        
         if self.tracking_thread:
             print(f"[DEBUG] 等待跟踪线程结束...")
             self.tracking_thread.join(timeout=2)
