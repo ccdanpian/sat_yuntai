@@ -288,6 +288,18 @@ class SatelliteTracker:
                 
                 if is_visible:
                     print(f"[INFO] 卫星可见，正在跟踪 - 方位角: {current_azimuth:.2f}°, 仰角: {current_elevation:.2f}°")
+                    
+                    # 根据云台朝向转换方位角
+                    if self.gimbal_direction == "north":
+                        # 云台朝北：方位角大于180度时需要转换
+                        if current_azimuth > 180:
+                            current_azimuth = current_azimuth - 360
+                    elif self.gimbal_direction == "south":
+                        # 云台朝南：方位角需要转换180度
+                        current_azimuth = current_azimuth - 180
+                        if current_azimuth < -180:
+                            current_azimuth += 360
+                    
                     # 控制云台跟踪卫星
                     self.control_gimbal(current_azimuth, current_elevation, current_time)
                 else:
