@@ -43,6 +43,7 @@ class SatelliteTracker:
         self.current_azimuth = 0.0
         self.current_elevation = 0.0
         self.gimbal_controller = None
+        self.trajectory_points = []  # 存储轨迹点数据
         
         # 后端不再需要星座URL配置，由前端负责下载
         
@@ -255,19 +256,14 @@ class SatelliteTracker:
                 
                 # 根据模式选择时间
                 if self.simulation_mode:
-                    # 强制时间模式：使用前端设置的开始时间加上循环次数作为时间偏移
-                    # 这样可以模拟任意时间点的卫星位置
                     if self.simulation_start_time is not None:
                         current_time = self.simulation_start_time + timedelta(seconds=loop_count)
-                        # 确保时间对象包含时区信息
                         if current_time.tzinfo is None:
                             current_time = current_time.replace(tzinfo=timezone.utc)
-                        # 保存当前模拟时间供API使用
                         self.current_simulation_time = current_time
                     else:
                         current_time = datetime.now(timezone.utc)
                 else:
-                    # 实时模式：使用当前系统时间
                     current_time = datetime.now(timezone.utc)
                 
                 if loop_count % 10 == 1:  # 每10次循环打印一次详细信息
@@ -275,15 +271,29 @@ class SatelliteTracker:
                     gimbal_mode_str = "硬件控制" if self.gimbal_controller else "后端模拟"
                     print(f"[DEBUG] 跟踪循环 #{loop_count} - {mode_str}模式, {gimbal_mode_str} - 时间: {current_time}")
                 
-                # 计算卫星位置
-                azimuth, elevation = self.calculate_satellite_position(
-                    self.current_satellite,
-                    self.ground_station,
-                    current_time
-                )
+                # 检查当前时间是否在可见时间段内
+                is_visible = False
+                current_azimuth = 0
+                current_elevation = 0
                 
-                # 控制云台
-                self.control_gimbal(azimuth, elevation, current_time)
+                # 在轨迹点中查找当前时间对应的位置
+                for point in self.trajectory_points:
+                    point_time = datetime.fromisoformat(point['time'].replace('Z', '+00:00'))
+                    if point_time <= current_time <= point_time + timedelta(seconds=10):
+                        is_visible = point['visible']
+                        if is_visible:
+                            current_azimuth = point['azimuth']
+                            current_elevation = point['elevation']
+                        break
+                
+                if is_visible:
+                    print(f"[INFO] 卫星可见，正在跟踪 - 方位角: {current_azimuth:.2f}°, 仰角: {current_elevation:.2f}°")
+                    # 控制云台跟踪卫星
+                    self.control_gimbal(current_azimuth, current_elevation, current_time)
+                else:
+                    print(f"[INFO] 卫星不可见，云台归零")
+                    # 控制云台归零
+                    self.control_gimbal(0, 0, current_time)
                 
                 # 等待1秒
                 time.sleep(1)
@@ -297,7 +307,7 @@ class SatelliteTracker:
     
     def start_tracking(self, satellite_data: Dict, ground_station: Dict, 
                       simulation_mode: bool = False, start_time: Optional[str] = None,
-                      gimbal_direction: str = "auto"):
+                      gimbal_direction: str = "auto", trajectory_points: List[Dict] = None):
         """开始跟踪"""
         print(f"[INFO] 收到开始跟踪请求")
         print(f"[DEBUG] 跟踪参数 - 卫星: {satellite_data.get('name', 'Unknown')}, 强制时间模式: {simulation_mode}")
@@ -324,6 +334,7 @@ class SatelliteTracker:
         self.current_satellite = satellite
         self.simulation_mode = simulation_mode
         self.gimbal_direction = gimbal_direction
+        self.trajectory_points = trajectory_points or []  # 保存轨迹点数据
         print(f"[DEBUG] 云台朝向设置: {gimbal_direction}")
         
         if simulation_mode and start_time:
@@ -342,8 +353,6 @@ class SatelliteTracker:
             print(f"[DEBUG] 实时模式开始时间: {self.simulation_start_time}")
         
         # 云台控制器状态检查
-        # 注意：前端的模拟开关只是强制时间模式，不影响云台控制
-        # 只有当云台控制器初始化失败时才进入后端模拟控制状态
         if not self.gimbal_controller:
             print(f"[WARNING] 云台控制器未初始化，将使用后端模拟控制模式")
             print(f"[INFO] 后端模拟控制模式：计算位置但不发送实际控制指令")
@@ -417,10 +426,8 @@ def static_files(filename):
 @app.route('/api/start_tracking', methods=['POST'])
 def api_start_tracking():
     """开始跟踪API"""
-    # print(f"[API] 收到POST请求: /api/start_tracking")
     try:
         data = request.get_json()
-        # print(f"[API] 请求数据: {json.dumps(data, indent=2, ensure_ascii=False)}")
         
         # 验证必要参数
         if not data:
@@ -440,19 +447,18 @@ def api_start_tracking():
         simulation_mode = data.get('simulationMode', False)
         start_time = data.get('startTime')
         gimbal_direction = data.get('gimbalDirection', 'auto')
-        
-        # print(f"[API] 解析参数完成 - 卫星: {satellite_data.get('name', 'Unknown')}, 模拟模式: {simulation_mode}, 云台朝向: {gimbal_direction}")
+        trajectory_points = data.get('trajectoryPoints', [])  # 获取轨迹点数据
         
         tracker.start_tracking(
             satellite_data, 
             ground_station, 
             simulation_mode, 
             start_time,
-            gimbal_direction
+            gimbal_direction,
+            trajectory_points  # 传递轨迹点数据
         )
         
         response = {'success': True, 'message': '跟踪已开始'}
-        # print(f"[API] 响应成功: {response}")
         return jsonify(response)
     
     except Exception as e:
@@ -730,6 +736,9 @@ def api_calculate_trajectory():
             if max_elevation >= 30.0:
                 # 找到符合条件的过境事件
                 print(f"[API] 找到符合条件的过境事件: 最大仰角 {max_elevation:.2f}°")
+                
+                # 保存轨迹数据供跟踪使用
+                tracker.trajectory_points = trajectory_points
                 
                 result = {
                     'trajectoryPoints': trajectory_points,  # 返回所有轨迹点（包括不可见点）
