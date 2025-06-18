@@ -5,6 +5,77 @@
 class EphemerisManager {
     constructor(tracker) {
         this.tracker = tracker;
+        this.setupLocalFileLoader();
+    }
+    
+    setupLocalFileLoader() {
+        // 创建文件选择器
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.tle,.txt';
+        fileInput.style.display = 'none';
+        fileInput.id = 'tleFileInput';
+        document.body.appendChild(fileInput);
+
+        // 创建加载按钮
+        const loadButton = document.createElement('button');
+        loadButton.textContent = '从本地加载TLE';
+        loadButton.className = 'btn btn-secondary';
+        loadButton.style.marginTop = '10px';
+        loadButton.style.width = '100%';
+        loadButton.onclick = () => fileInput.click();
+
+        // 插入到第一个.panel（星历下载与卫星选择面板）
+        const panels = document.querySelectorAll('.panel');
+        if (panels.length > 0) {
+            panels[0].appendChild(loadButton);
+        } else {
+            document.body.appendChild(loadButton);
+        }
+
+        // 监听文件选择
+        fileInput.addEventListener('change', (event) => this.handleLocalFile(event));
+    }
+
+    async handleLocalFile(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const progressDiv = document.getElementById('downloadProgress');
+        const progressBar = document.getElementById('progressBar');
+        
+        progressDiv.style.display = 'block';
+        progressBar.style.width = '0%';
+
+        try {
+            this.tracker.updateStatus('正在读取本地TLE文件...');
+            this.tracker.statusManager.updateStatusDisplay('satelliteStatus', '📡 加载卫星', 'warning');
+            this.tracker.addLog(`开始读取本地文件: ${file.name}`);
+
+            const text = await file.text();
+            progressBar.style.width = '50%';
+
+            // 获取当前选择的星座
+            const constellation = document.getElementById('constellation').value;
+            if (!constellation) {
+                throw new Error('请先选择星座');
+            }
+
+            // 处理卫星数据
+            await this.processSatellites(constellation, text);
+            
+            this.tracker.updateStatus(`本地TLE文件处理完成，共 ${this.tracker.satellites.length} 颗卫星`);
+            this.tracker.statusManager.updateStatusDisplay('satelliteStatus', '✅ 卫星数据已加载', 'success');
+            this.tracker.addLog(`成功加载本地TLE文件，共 ${this.tracker.satellites.length} 颗卫星`);
+
+        } catch (error) {
+            this.tracker.addLog(`加载失败: ${error.message}`, 'error');
+            this.tracker.updateStatus('加载失败');
+        } finally {
+            progressDiv.style.display = 'none';
+            // 清空文件选择器，允许重复选择同一文件
+            event.target.value = '';
+        }
     }
     
     async downloadEphemeris() {
@@ -138,7 +209,19 @@ class EphemerisManager {
     }
     
     saveToFile(data, filename) {
-        const blob = new Blob([data], { type: 'text/plain' });
+        const constellation = document.getElementById('constellation').value;
+        let contentToSave;
+        
+        // 对于需要筛选的星座，只保存筛选后的卫星数据
+        if (constellation === 'starlink_dtc' || constellation === 'x2') {
+            contentToSave = this.tracker.satellites.map(sat => 
+                `${sat.name}\n${sat.line1}\n${sat.line2}`
+            ).join('\n');
+        } else {
+            contentToSave = data;
+        }
+        
+        const blob = new Blob([contentToSave], { type: 'text/plain' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
