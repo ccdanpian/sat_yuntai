@@ -271,41 +271,73 @@ class SatelliteTracker:
                     gimbal_mode_str = "硬件控制" if self.gimbal_controller else "后端模拟"
                     print(f"[DEBUG] 跟踪循环 #{loop_count} - {mode_str}模式, {gimbal_mode_str} - 时间: {current_time}")
                 
-                # 检查当前时间是否在可见时间段内
-                is_visible = False
-                current_azimuth = 0
-                current_elevation = 0
-                
-                # 在轨迹点中查找当前时间对应的位置
-                for point in self.trajectory_points:
-                    point_time = datetime.fromisoformat(point['time'].replace('Z', '+00:00'))
-                    if point_time <= current_time <= point_time + timedelta(seconds=10):
-                        is_visible = point['visible']
-                        if is_visible:
-                            current_azimuth = point['azimuth']
-                            current_elevation = point['elevation']
-                        break
-                
-                if is_visible:
-                    print(f"[INFO] 卫星可见，正在跟踪 - 方位角: {current_azimuth:.2f}°, 仰角: {current_elevation:.2f}°")
+                # 实时计算卫星位置，而不是依赖预计算的轨迹点
+                try:
+                    azimuth, elevation = self.calculate_satellite_position(
+                        self.current_satellite, 
+                        self.ground_station, 
+                        current_time, 
+                        convert_azimuth=False  # 先获取原始方位角
+                    )
                     
-                    # 根据云台朝向转换方位角
-                    if self.gimbal_direction == "north":
-                        # 云台朝北：方位角大于180度时需要转换
-                        if current_azimuth > 180:
-                            current_azimuth = current_azimuth - 360
-                    elif self.gimbal_direction == "south":
-                        # 云台朝南：方位角需要转换180度
-                        current_azimuth = current_azimuth - 180
-                        if current_azimuth < -180:
-                            current_azimuth += 360
+                    # 检查卫星是否可见（仰角大于5度）
+                    is_visible = elevation > 5
                     
-                    # 控制云台跟踪卫星
-                    self.control_gimbal(current_azimuth, current_elevation, current_time)
-                else:
-                    print(f"[INFO] 卫星不可见，云台归零")
-                    # 控制云台归零
-                    self.control_gimbal(0, 0, current_time)
+                    if is_visible:
+                        print(f"[INFO] 卫星可见，正在跟踪 - 方位角: {azimuth:.2f}°, 仰角: {elevation:.2f}°")
+                        
+                        # 根据云台朝向转换方位角
+                        if self.gimbal_direction == "north":
+                            # 云台朝北：方位角大于180度时需要转换
+                            if azimuth > 180:
+                                azimuth = azimuth - 360
+                        elif self.gimbal_direction == "south":
+                            # 云台朝南：方位角需要转换180度
+                            azimuth = azimuth - 180
+                            if azimuth < -180:
+                                azimuth += 360
+                        
+                        # 控制云台跟踪卫星
+                        self.control_gimbal(azimuth, elevation, current_time)
+                    else:
+                        print(f"[INFO] 卫星不可见，云台归零")
+                        # 控制云台归零
+                        self.control_gimbal(0, 0, current_time)
+                        
+                except Exception as calc_error:
+                    print(f"[ERROR] 实时位置计算失败: {calc_error}")
+                    # 如果实时计算失败，尝试使用轨迹点作为备选方案
+                    is_visible = False
+                    current_azimuth = 0
+                    current_elevation = 0
+                    
+                    # 在轨迹点中查找当前时间对应的位置
+                    for point in self.trajectory_points:
+                        point_time = datetime.fromisoformat(point['time'].replace('Z', '+00:00'))
+                        # 将匹配窗口从10秒改为1秒，确保每秒都能匹配到正确的轨迹点
+                        if point_time <= current_time <= point_time + timedelta(seconds=1):
+                            is_visible = point['visible']
+                            if is_visible:
+                                current_azimuth = point['azimuth']
+                                current_elevation = point['elevation']
+                            break
+                    
+                    if is_visible:
+                        print(f"[INFO] 使用轨迹点数据 - 方位角: {current_azimuth:.2f}°, 仰角: {current_elevation:.2f}°")
+                        
+                        # 根据云台朝向转换方位角
+                        if self.gimbal_direction == "north":
+                            if current_azimuth > 180:
+                                current_azimuth = current_azimuth - 360
+                        elif self.gimbal_direction == "south":
+                            current_azimuth = current_azimuth - 180
+                            if current_azimuth < -180:
+                                current_azimuth += 360
+                        
+                        self.control_gimbal(current_azimuth, current_elevation, current_time)
+                    else:
+                        print(f"[INFO] 卫星不可见，云台归零")
+                        self.control_gimbal(0, 0, current_time)
                 
                 # 等待1秒
                 time.sleep(1)
@@ -643,7 +675,7 @@ def calculate_detailed_pass(satellite, ground_station, start_time, end_time):
     """计算详细过境轨迹"""
     trajectory_points = []
     current_time = start_time
-    time_step = timedelta(seconds=10)
+    time_step = timedelta(seconds=1)
     
     # 批量计算时间点
     time_points = []
