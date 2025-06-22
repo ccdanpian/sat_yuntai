@@ -66,8 +66,7 @@ class SatelliteTracker:
             if self.is_raspberry_pi5():
                 device = '/dev/ttyAMA0'
             else:
-                # 直接使用实际存在的设备
-                device = '/dev/ttyS0'
+                device = '/dev/serial0'
             
             self.gimbal_controller = BaseController(device, 115200)
             print(f"云台控制器初始化成功: {device}")
