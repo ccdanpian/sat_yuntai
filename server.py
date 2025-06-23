@@ -29,6 +29,13 @@ except ImportError:
     print("警告: base_ctrl模块未找到，将使用模拟模式")
     BaseController = None
 
+# 导入中位设置模块
+try:
+    from calibration import create_calibration_instance
+except ImportError:
+    print("警告: calibration模块未找到，中位设置功能将不可用")
+    create_calibration_instance = None
+
 app = Flask(__name__)
 CORS(app)
 
@@ -49,6 +56,15 @@ class SatelliteTracker:
         
         # 初始化云台控制器
         self.init_gimbal_controller()
+        
+        # 初始化中位设置模块
+        self.calibration = None
+        if create_calibration_instance:
+            # 复用现有的云台控制器实例
+            self.calibration = create_calibration_instance(self.gimbal_controller)
+            print("中位设置模块初始化完成")
+        else:
+            print("警告: 中位设置模块未初始化")
         
         # 加载时间尺度
         self.ts = load.timescale()
@@ -471,6 +487,92 @@ def index():
     """主页"""
     return send_from_directory('.', 'index.html')
 
+# 中位设置页面路由 - 必须在通用静态文件路由之前
+@app.route('/calibration')
+def calibration_page():
+    """中位设置页面"""
+    return send_from_directory('.', 'calibration.html')
+
+# 在第495行之前（通用静态文件路由之前）添加所有校准API路由
+
+# 校准相关API路由
+@app.route('/api/calibration/torque', methods=['POST'])
+def api_calibration_torque():
+    """控制舵机扭矩锁"""
+    try:
+        if not tracker.calibration:
+            return jsonify({
+                'success': False,
+                'message': '中位设置模块未初始化'
+            }), 500
+        
+        data = request.get_json()
+        enable = data.get('enable', True)
+        
+        result = tracker.calibration.control_torque(enable)
+        
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify(result), 400
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'扭矩锁控制失败: {str(e)}'
+        }), 500
+
+@app.route('/api/calibration/set_center', methods=['POST'])
+def api_calibration_set_center():
+    """设置舵机中位"""
+    try:
+        if not tracker.calibration:
+            return jsonify({
+                'success': False,
+                'message': '中位设置模块未初始化'
+            }), 500
+        
+        result = tracker.calibration.set_center_position()
+        
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify(result), 400
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'中位设置失败: {str(e)}'
+        }), 500
+
+@app.route('/api/calibration/test', methods=['POST'])
+def api_calibration_test():
+    """测试校准"""
+    try:
+        if not tracker.calibration:
+            return jsonify({
+                'success': False,
+                'message': '中位设置模块未初始化'
+            }), 500
+        
+        data = request.get_json()
+        azimuth = data.get('azimuth', 0)
+        elevation = data.get('elevation', 0)
+        
+        result = tracker.calibration.test_movement(azimuth, elevation)
+        
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify(result), 400
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'测试失败: {str(e)}'
+        }), 500
+
+# 通用静态文件路由（保持在最后）
 @app.route('/<path:filename>')
 def static_files(filename):
     """静态文件"""

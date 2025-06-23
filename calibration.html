@@ -6,291 +6,328 @@
     <title>云台中位设置</title>
     <style>
         body {
-            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
             padding: 20px;
-            background-color: #f5f5f5;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
         }
+        
         .container {
             max-width: 800px;
             margin: 0 auto;
             background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            color: white;
             padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #333;
             text-align: center;
-            margin-bottom: 30px;
         }
+        
+        .content {
+            padding: 30px;
+        }
+        
         .step {
             margin-bottom: 30px;
             padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            background-color: #fafafa;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            background: #f9f9f9;
         }
-        .step h3 {
+        
+        .step.active {
+            border-color: #3498db;
+            background: #e8f4fd;
+        }
+        
+        .step-title {
+            font-size: 18px;
+            font-weight: bold;
             color: #2c3e50;
-            margin-top: 0;
+            margin-bottom: 10px;
         }
-        .step-content {
-            margin: 15px 0;
+        
+        .step-description {
+            color: #666;
+            margin-bottom: 15px;
+            line-height: 1.6;
         }
-        .button-group {
-            margin: 15px 0;
-        }
-        button {
-            background-color: #3498db;
+        
+        .btn {
+            background: #3498db;
             color: white;
             border: none;
-            padding: 10px 20px;
-            margin: 5px;
-            border-radius: 5px;
+            padding: 12px 24px;
+            border-radius: 6px;
             cursor: pointer;
             font-size: 14px;
+            margin-right: 10px;
+            transition: all 0.3s;
         }
-        button:hover {
-            background-color: #2980b9;
+        
+        .btn:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
         }
-        button:disabled {
-            background-color: #bdc3c7;
+        
+        .btn:disabled {
+            background: #bdc3c7;
             cursor: not-allowed;
+            transform: none;
         }
-        .danger {
-            background-color: #e74c3c;
+        
+        .btn-danger {
+            background: #e74c3c;
         }
-        .danger:hover {
-            background-color: #c0392b;
+        
+        .btn-danger:hover {
+            background: #c0392b;
         }
-        .success {
-            background-color: #27ae60;
+        
+        .btn-success {
+            background: #27ae60;
         }
-        .success:hover {
-            background-color: #229954;
+        
+        .btn-success:hover {
+            background: #229954;
         }
-        .warning {
-            background-color: #f39c12;
-        }
-        .warning:hover {
-            background-color: #e67e22;
-        }
-        .control-panel {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
+        
+        .input-group {
+            display: flex;
             gap: 10px;
-            max-width: 200px;
-            margin: 15px auto;
+            align-items: center;
+            margin-top: 10px;
         }
-        .control-panel button {
-            padding: 15px;
-            font-size: 16px;
+        
+        .input-group input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 80px;
         }
+        
         .log {
-            background-color: #2c3e50;
+            background: #2c3e50;
             color: #ecf0f1;
             padding: 15px;
-            border-radius: 5px;
-            height: 200px;
-            overflow-y: auto;
+            border-radius: 8px;
             font-family: 'Courier New', monospace;
             font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
             margin-top: 20px;
         }
-        .alert {
-            padding: 15px;
-            margin: 15px 0;
-            border-radius: 5px;
-            border-left: 4px solid;
-        }
-        .alert-warning {
-            background-color: #fff3cd;
-            border-color: #ffc107;
+        
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
             color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
         }
-        .alert-info {
-            background-color: #d1ecf1;
-            border-color: #17a2b8;
-            color: #0c5460;
-        }
-        .json-command {
-            background-color: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            padding: 10px;
-            font-family: 'Courier New', monospace;
-            margin: 10px 0;
+        
+        .navigation {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎯 云台中位设置向导</h1>
+        <div class="header">
+            <h1>🎯 云台中位设置</h1>
+            <p>请按照以下步骤完成云台舵机中位校准</p>
+        </div>
         
-        <div class="alert alert-warning">
-            <strong>⚠️ 注意事项：</strong>
-            <ul>
-                <li>请确保云台硬件已正确连接</li>
-                <li>设置过程中请勿强行转动舵机</li>
-                <li>按照步骤顺序进行操作</li>
-            </ul>
-        </div>
-
-        <!-- 步骤1：关闭扭矩锁 -->
-        <div class="step">
-            <h3>步骤 1: 关闭舵机扭矩锁</h3>
-            <div class="step-content">
-                <p>在设置中位前，需要先关闭两个舵机的扭矩锁，以便手动调整舵机角度。</p>
-                <div class="json-command">
-                    命令格式: {"T":210,"cmd":0}
+        <div class="content">
+            <div class="warning">
+                <strong>⚠️ 重要提示：</strong>
+                <ul>
+                    <li>校准过程中请确保云台周围无障碍物</li>
+                    <li>请在云台完全静止后再进行下一步操作</li>
+                    <li>如遇异常情况，请立即停止操作</li>
+                </ul>
+            </div>
+            
+            <!-- 步骤1：关闭扭矩锁 -->
+            <div class="step" id="step1">
+                <div class="step-title">步骤 1: 关闭舵机扭矩锁</div>
+                <div class="step-description">
+                    关闭扭矩锁后，您可以手动调整云台到合适的中位位置。
                 </div>
-                <div class="button-group">
-                    <button onclick="setTorqueLock(0)" class="danger">关闭扭矩锁</button>
-                    <button onclick="setTorqueLock(1)" class="warning">开启扭矩锁</button>
+                <button class="btn btn-danger" onclick="toggleTorque(false)">关闭扭矩锁</button>
+                <button class="btn" onclick="toggleTorque(true)">开启扭矩锁</button>
+            </div>
+            
+            <!-- 步骤2：手动调整 -->
+            <div class="step" id="step2">
+                <div class="step-title">步骤 2: 手动调整云台位置</div>
+                <div class="step-description">
+                    请手动将云台调整到您希望的中位位置（通常是水平朝向正前方）。
+                    调整完成后，请确保云台完全静止。
+                </div>
+                <p><strong>💡 提示：</strong>中位位置通常是云台水平朝向正前方的位置</p>
+            </div>
+            
+            <!-- 步骤3：设置中位 -->
+            <div class="step" id="step3">
+                <div class="step-title">步骤 3: 设置舵机中位</div>
+                <div class="step-description">
+                    确认云台已调整到合适位置后，点击下方按钮将当前位置设置为舵机中位。
+                </div>
+                <button class="btn btn-success" onclick="setCenter()">设置当前位置为中位</button>
+            </div>
+            
+            <!-- 步骤4：测试校准 -->
+            <div class="step" id="step4">
+                <div class="step-title">步骤 4: 测试校准结果</div>
+                <div class="step-description">
+                    测试云台是否能正确响应控制指令。您可以输入不同的角度值进行测试。
+                </div>
+                <div class="input-group">
+                    <label>方位角:</label>
+                    <input type="number" id="testAzimuth" value="0" min="-180" max="180">
+                    <label>°</label>
+                    <label>仰角:</label>
+                    <input type="number" id="testElevation" value="0" min="-90" max="90">
+                    <label>°</label>
+                    <button class="btn" onclick="testCalibration()">测试移动</button>
+                </div>
+                <div style="margin-top: 15px;">
+                    <button class="btn" onclick="testCalibration(0, 0)">回到中位</button>
+                    <button class="btn" onclick="testCalibration(90, 0)">测试右转90°</button>
+                    <button class="btn" onclick="testCalibration(-90, 0)">测试左转90°</button>
+                    <button class="btn" onclick="testCalibration(0, 45)">测试仰角45°</button>
                 </div>
             </div>
-        </div>
-
-        <!-- 步骤2：手动调整 -->
-        <div class="step">
-            <h3>步骤 2: 手动调整舵机角度</h3>
-            <div class="step-content">
-                <p>扭矩锁关闭后，请手动调整两个舵机的角度，使摄像头平行地指向正前方。</p>
-                <div class="alert alert-info">
-                    <strong>💡 调整要点：</strong>
-                    <ul>
-                        <li>水平舵机：调整至摄像头正对前方</li>
-                        <li>倾斜舵机：调整至摄像头水平状态</li>
-                        <li>确保两个舵机都处于机械中位</li>
-                    </ul>
-                </div>
+            
+            <!-- 操作日志 -->
+            <div class="log" id="log">
+                <div>系统就绪，等待操作...</div>
             </div>
-        </div>
-
-        <!-- 步骤3：设置中位 -->
-        <div class="step">
-            <h3>步骤 3: 设置舵机中位</h3>
-            <div class="step-content">
-                <p>调整好角度后，分别为两个舵机设置中位。</p>
-                <div class="json-command">
-                    命令格式: {"T":502,"id":舵机ID}<br>
-                    ID说明: 1=倾斜舵机, 2=水平舵机
-                </div>
-                <div class="button-group">
-                    <button onclick="setMiddle(1)" class="success">设置倾斜舵机中位 (ID:1)</button>
-                    <button onclick="setMiddle(2)" class="success">设置水平舵机中位 (ID:2)</button>
-                </div>
+            
+            <!-- 导航 -->
+            <div class="navigation">
+                <button class="btn" onclick="window.location.href='/'">返回主页</button>
             </div>
-        </div>
-
-        <!-- 步骤4：测试校准 -->
-        <div class="step">
-            <h3>步骤 4: 测试校准结果</h3>
-            <div class="step-content">
-                <p>设置完成后，可以测试云台是否正确校准。</p>
-                <div class="json-command">
-                    测试命令: {"T":133,"X":0,"Y":0,"SPD":0,"ACC":0}
-                </div>
-                
-                <!-- 云台控制面板 -->
-                <div class="control-panel">
-                    <button onclick="gimbalControl(0, 30)">↑</button>
-                    <button onclick="gimbalControl(-30, 0)">←</button>
-                    <button onclick="gimbalControl(0, 0)" class="success">中位</button>
-                    <button onclick="gimbalControl(30, 0)">→</button>
-                    <button onclick="gimbalControl(0, -30)">↓</button>
-                </div>
-                
-                <div class="button-group">
-                    <button onclick="testCalibration()" class="success">测试校准</button>
-                    <button onclick="gimbalControl(0, 0)" class="warning">归零测试</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- 操作日志 -->
-        <div class="step">
-            <h3>📋 操作日志</h3>
-            <div id="log" class="log"></div>
-            <button onclick="clearLog()">清空日志</button>
         </div>
     </div>
-
+    
     <script>
-        // 日志功能
         function addLog(message, type = 'info') {
             const log = document.getElementById('log');
             const timestamp = new Date().toLocaleTimeString();
-            const logEntry = `[${timestamp}] ${message}\n`;
-            log.textContent += logEntry;
+            const logEntry = document.createElement('div');
+            logEntry.style.color = type === 'error' ? '#e74c3c' : type === 'success' ? '#27ae60' : '#ecf0f1';
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            log.appendChild(logEntry);
             log.scrollTop = log.scrollHeight;
         }
-
-        function clearLog() {
-            document.getElementById('log').textContent = '';
-        }
-
-        // API调用函数
-        async function apiCall(endpoint, data) {
+        
+        async function toggleTorque(enable) {
             try {
-                const response = await fetch(`/api/${endpoint}`, {
+                addLog(`${enable ? '开启' : '关闭'}舵机扭矩锁...`);
+                
+                const response = await fetch('/api/calibration/torque', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
+                        'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify({ enable: enable })
                 });
                 
                 const result = await response.json();
                 
                 if (result.success) {
-                    addLog(`✅ ${result.message}`, 'success');
-                    if (result.command) {
-                        addLog(`📤 发送命令: ${JSON.stringify(result.command)}`, 'command');
+                    addLog(result.message, 'success');
+                    if (result.simulation) {
+                        addLog('注意：当前为模拟模式', 'info');
                     }
                 } else {
-                    addLog(`❌ ${result.message}`, 'error');
+                    addLog(result.message, 'error');
                 }
-                
-                return result;
             } catch (error) {
-                addLog(`🔥 网络错误: ${error.message}`, 'error');
-                return { success: false, message: error.message };
+                addLog(`操作失败: ${error.message}`, 'error');
             }
         }
-
-        // 扭矩锁控制
-        async function setTorqueLock(cmd) {
-            const action = cmd ? '开启' : '关闭';
-            addLog(`🔧 ${action}扭矩锁...`);
-            await apiCall('torque_lock', { cmd: cmd });
+        
+        async function setCenter() {
+            try {
+                addLog('设置舵机中位...');
+                
+                const response = await fetch('/api/calibration/set_center', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    addLog(result.message, 'success');
+                    if (result.simulation) {
+                        addLog('注意：当前为模拟模式', 'info');
+                    }
+                } else {
+                    addLog(result.message, 'error');
+                }
+            } catch (error) {
+                addLog(`设置失败: ${error.message}`, 'error');
+            }
         }
-
-        // 设置中位
-        async function setMiddle(servoId) {
-            const servoName = servoId === 1 ? '倾斜舵机' : '水平舵机';
-            addLog(`⚙️ 设置${servoName}中位...`);
-            await apiCall('set_middle', { id: servoId });
+        
+        async function testCalibration(azimuth = null, elevation = null) {
+            try {
+                if (azimuth === null) {
+                    azimuth = parseFloat(document.getElementById('testAzimuth').value) || 0;
+                }
+                if (elevation === null) {
+                    elevation = parseFloat(document.getElementById('testElevation').value) || 0;
+                }
+                
+                addLog(`测试云台移动: 方位角${azimuth}°, 仰角${elevation}°`);
+                
+                const response = await fetch('/api/calibration/test', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        azimuth: azimuth, 
+                        elevation: elevation 
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    addLog(result.message, 'success');
+                    if (result.simulation) {
+                        addLog('注意：当前为模拟模式', 'info');
+                    }
+                } else {
+                    addLog(result.message, 'error');
+                }
+            } catch (error) {
+                addLog(`测试失败: ${error.message}`, 'error');
+            }
         }
-
-        // 云台控制
-        async function gimbalControl(x, y, speed = 0, acc = 0) {
-            addLog(`🎮 云台控制: X=${x}°, Y=${y}°`);
-            await apiCall('gimbal_control', { x: x, y: y, speed: speed, acc: acc });
-        }
-
-        // 测试校准
-        async function testCalibration() {
-            addLog(`🧪 开始校准测试...`);
-            await apiCall('test_calibration', {});
-        }
-
-        // 页面加载完成
-        window.onload = function() {
-            addLog('🚀 云台中位设置向导已启动');
-            addLog('📖 请按照步骤顺序进行操作');
-        };
+        
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            addLog('中位设置页面已加载');
+            addLog('请按照步骤进行操作');
+        });
     </script>
 </body>
 </html>
