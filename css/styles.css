@@ -108,6 +108,19 @@ h1 {
 /* 对话框样式 */
 dialog {
     /* 基础样式由内联样式控制 */
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    color: white;
+    padding: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    z-index: 9999;
+    max-width: 500px;
+    width: 90%;
 }
 
 dialog::backdrop {
