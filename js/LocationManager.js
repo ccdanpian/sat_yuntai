@@ -14,31 +14,47 @@ class LocationManager {
     
     // 加载地面站配置
     loadGroundStationConfig() {
-        const savedConfig = localStorage.getItem('groundStationConfig');
-        if (savedConfig) {
+        // 加载位置配置
+        const savedLocationConfig = localStorage.getItem('groundStationConfig');
+        if (savedLocationConfig) {
             try {
-                const config = JSON.parse(savedConfig);
-                document.getElementById('latitude').value = config.latitude || '';
-                document.getElementById('longitude').value = config.longitude || '';
-                document.getElementById('altitude').value = config.altitude || '';
-                document.getElementById('gimbalDirection').value = config.gimbalDirection || 'auto';
-                this.tracker.addLog('已加载地面站配置');
+                const locationConfig = JSON.parse(savedLocationConfig);
+                document.getElementById('latitude').value = locationConfig.latitude || '';
+                document.getElementById('longitude').value = locationConfig.longitude || '';
+                document.getElementById('altitude').value = locationConfig.altitude || '';
+                this.tracker.addLog('已加载地面站位置配置');
             } catch (e) {
-                this.tracker.addLog('加载地面站配置失败: ' + e.message);
+                this.tracker.addLog('加载地面站位置配置失败: ' + e.message);
+            }
+        }
+        
+        // 加载云台配置
+        const savedGimbalConfig = localStorage.getItem('gimbalConfig');
+        if (savedGimbalConfig) {
+            try {
+                const gimbalConfig = JSON.parse(savedGimbalConfig);
+                document.getElementById('gimbalDirection').value = gimbalConfig.gimbalDirection || 'north';
+                this.tracker.addLog('已加载云台配置');
+            } catch (e) {
+                this.tracker.addLog('加载云台配置失败: ' + e.message);
             }
         }
     }
     
     // 保存地面站配置
     saveGroundStationConfig() {
-        const config = {
+        const locationConfig = {
             latitude: document.getElementById('latitude').value,
             longitude: document.getElementById('longitude').value,
-            altitude: document.getElementById('altitude').value,
+            altitude: document.getElementById('altitude').value
+        };
+        
+        const gimbalConfig = {
             gimbalDirection: document.getElementById('gimbalDirection').value
         };
         
-        localStorage.setItem('groundStationConfig', JSON.stringify(config));
+        localStorage.setItem('groundStationConfig', JSON.stringify(locationConfig));
+        localStorage.setItem('gimbalConfig', JSON.stringify(gimbalConfig));
         this.tracker.addLog('已保存地面站配置');
     }
     
@@ -82,7 +98,7 @@ class LocationManager {
                     document.getElementById('latitude').value = location.latitude;
                     document.getElementById('longitude').value = location.longitude;
                     document.getElementById('altitude').value = location.altitude || '';
-                    document.getElementById('gimbalDirection').value = location.gimbalDirection || 'auto';
+                    // 不再设置云台朝向，保持当前云台配置不变
                     this.saveGroundStationConfig();
                     this.tracker.addLog(`已选择位置: ${location.name}`);
                 }
@@ -96,8 +112,6 @@ class LocationManager {
     showAddLocationDialog() {
         const dialog = document.getElementById('addLocationDialog');
         if (dialog) {
-            dialog.style.display = 'block';
-            
             // 预填充当前坐标
             const currentLat = document.getElementById('latitude').value;
             const currentLon = document.getElementById('longitude').value;
@@ -114,6 +128,9 @@ class LocationManager {
                 this.bindGetCurrentLocationButton();
                 this.getCurrentLocationBound = true;
             }
+            
+            // 使用showModal()方法显示模态对话框
+            dialog.showModal();
         }
     }
     
@@ -121,7 +138,8 @@ class LocationManager {
     hideAddLocationDialog() {
         const dialog = document.getElementById('addLocationDialog');
         if (dialog) {
-            dialog.style.display = 'none';
+            // 使用close()方法关闭模态对话框
+            dialog.close();
             
             // 清空表单，但要避免在保存过程中清空
             if (!this.isHiding && !this.isSaving) {
@@ -150,8 +168,6 @@ class LocationManager {
         const latitude = document.getElementById('dialogLatitude').value.trim();
         const longitude = document.getElementById('dialogLongitude').value.trim();
         const altitude = document.getElementById('dialogAltitude').value.trim();
-        // 注意：HTML中没有gimbalDirection的对话框字段，使用默认值
-        const gimbalDirection = 'auto';
         
         // 更严格的验证
         if (name.length === 0) {
@@ -202,13 +218,12 @@ class LocationManager {
             locations = locations.filter(loc => loc.name !== name);
         }
         
-        // 添加新位置
+        // 添加新位置（只保存位置信息，不包含云台朝向）
         const newLocation = {
             name: name,
             latitude: latitude,
             longitude: longitude,
-            altitude: altitude,
-            gimbalDirection: gimbalDirection
+            altitude: altitude
         };
         
         locations.push(newLocation);
