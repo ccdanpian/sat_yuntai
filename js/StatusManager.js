@@ -185,6 +185,22 @@ class StatusManager {
         this.updateStatus(message);
     }
     
+    // 显示状态信息（通用方法）
+    showStatus(message, type = 'info') {
+        switch (type) {
+            case 'error':
+                this.showError(message);
+                break;
+            case 'success':
+                this.showSuccess(message);
+                break;
+            case 'info':
+            default:
+                this.updateStatus(message);
+                break;
+        }
+    }
+    
     // 更新轨迹信息显示
     updateTrajectoryInfo(info) {
         const elements = {
