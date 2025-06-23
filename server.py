@@ -195,7 +195,10 @@ class SatelliteTracker:
                 if converted_azimuth < -180:
                     converted_azimuth += 360
             else:
+                # 默认按朝北处理
                 converted_azimuth = azimuth
+                if azimuth > 180:
+                    converted_azimuth = azimuth - 360
             
             # 检查转换后的角度是否在云台可转动范围内
             if abs(converted_azimuth) > 180:
