@@ -588,15 +588,80 @@ class TrackingController {
                 max-width: 300px;
                 text-align: center;
                 border: 2px solid #fff;
+                transition: all 0.3s ease;
             `;
             document.body.appendChild(hintElement);
+        }
+        
+        // 获取用户当前选择的云台朝向
+        const userSelectedDirection = document.getElementById('gimbalDirection').value;
+        const userDirectionText = userSelectedDirection === 'north' ? '朝北' : '朝南';
+        
+        // 将建议朝向转换为可比较的格式
+        let recommendedDirection = '';
+        if (direction.includes('北')) {
+            recommendedDirection = 'north';
+        } else if (direction.includes('南')) {
+            recommendedDirection = 'south';
+        } else {
+            // 对于东西方向，根据具体情况给出建议
+            // 一般来说，东西方向的轨迹建议使用朝北设置
+            recommendedDirection = 'north';
+        }
+        
+        // 检查朝向是否一致
+        const isDirectionMismatch = userSelectedDirection !== recommendedDirection;
+        
+        // 构建提示内容
+        let warningContent = '';
+        if (isDirectionMismatch) {
+            const recommendedText = recommendedDirection === 'north' ? '朝北' : '朝南';
+            warningContent = `
+                <div style="margin-top: 10px; padding: 8px; background: rgba(255, 192, 203, 0.3); border: 1px solid #ff69b4; border-radius: 5px; font-size: 14px;">
+                    ⚠️ 朝向不匹配！<br>
+                    当前设置: ${userDirectionText}<br>
+                    建议设置: ${recommendedText}
+                </div>
+            `;
         }
         
         hintElement.innerHTML = `
             <div style="margin-bottom: 8px; font-size: 18px;">🎯 云台朝向建议</div>
             <div style="font-size: 20px; margin: 10px 0;">${direction}</div>
             <div style="font-size: 14px; opacity: 0.9;">${passInfo}</div>
+            <div style="font-size: 12px; margin-top: 8px; opacity: 0.8;">当前设置: ${userDirectionText}</div>
+            ${warningContent}
         `;
+        
+        // 如果朝向不匹配，添加粉红色闪烁效果
+        if (isDirectionMismatch) {
+            hintElement.style.background = 'linear-gradient(135deg, #ff69b4 0%, #ff1493 100%)';
+            hintElement.style.animation = 'pinkFlash 1.5s ease-in-out infinite';
+            
+            // 添加CSS动画（如果还没有添加）
+            if (!document.getElementById('pinkFlashStyle')) {
+                const style = document.createElement('style');
+                style.id = 'pinkFlashStyle';
+                style.textContent = `
+                    @keyframes pinkFlash {
+                        0%, 100% {
+                            background: linear-gradient(135deg, #ff69b4 0%, #ff1493 100%);
+                            transform: scale(1);
+                        }
+                        50% {
+                            background: linear-gradient(135deg, #ff1493 0%, #ff69b4 100%);
+                            transform: scale(1.02);
+                        }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        } else {
+            // 朝向匹配时恢复正常样式
+            hintElement.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            hintElement.style.animation = 'none';
+        }
+        
         hintElement.style.display = 'block';
     }
     
