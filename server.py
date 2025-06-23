@@ -641,6 +641,25 @@ def find_pass_candidates_fast(satellite, ground_station, start_time, search_hour
     current_time = start_time
     end_time = start_time + timedelta(hours=search_hours)
     
+    # 首先检查起始时间的卫星仰角
+    try:
+        initial_azimuth, initial_elevation = tracker.calculate_satellite_position(
+            satellite, ground_station, start_time, convert_azimuth=False
+        )
+        
+        # 如果起始时间卫星已经升起，将其作为第一个候选时间段
+        if initial_elevation > 0:
+            # 向前回溯寻找过境开始，向后延伸寻找过境结束
+            pass_start = start_time - timedelta(minutes=30)
+            pass_end = start_time + timedelta(minutes=30)
+            candidates.append((pass_start, pass_end))
+            print(f"[DEBUG] 检测到起始时间卫星已升起，仰角: {initial_elevation:.2f}°")
+            
+            # 从起始时间+30分钟开始继续搜索后续过境
+            current_time = start_time + timedelta(minutes=30)
+    except Exception as e:
+        print(f"[DEBUG] 检查起始时间失败: {e}")
+    
     # 粗搜索：3分钟间隔快速扫描
     coarse_step = timedelta(minutes=3)
     prev_elevation = None
