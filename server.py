@@ -116,10 +116,15 @@ CONSTELLATION_LABELS = {
 }
 MIN_VISIBLE_ELEVATION = get_float_env('MIN_VISIBLE_ELEVATION', 5)
 MIN_PASS_MAX_ELEVATION = get_float_env('MIN_PASS_MAX_ELEVATION', 30)
-TRACKING_UPDATE_INTERVAL = max(0.1, get_float_env('TRACKING_UPDATE_INTERVAL', 0.25))
+TRACKING_UPDATE_INTERVAL = max(0.1, get_float_env('TRACKING_UPDATE_INTERVAL', 0.1))
 GIMBAL_COMMAND_DEADBAND_DEGREES = max(0.0, get_float_env('GIMBAL_COMMAND_DEADBAND_DEGREES', 0.05))
+GIMBAL_MIN_COMMAND_INTERVAL = max(0.0, get_float_env('GIMBAL_MIN_COMMAND_INTERVAL', 0.25))
+GIMBAL_FORCE_COMMAND_DEGREES = max(
+    GIMBAL_COMMAND_DEADBAND_DEGREES,
+    get_float_env('GIMBAL_FORCE_COMMAND_DEGREES', 0.2)
+)
 GIMBAL_TRACKING_SPEED = max(1, get_int_env('GIMBAL_TRACKING_SPEED', 10))
-GIMBAL_TRACKING_ACCELERATION = max(0, get_int_env('GIMBAL_TRACKING_ACCELERATION', 0))
+GIMBAL_TRACKING_ACCELERATION = max(0, get_int_env('GIMBAL_TRACKING_ACCELERATION', 20))
 
 def require_api_token(func):
     """Protect hardware-changing API endpoints when SAT_YUNTAI_API_TOKEN is set."""
@@ -199,6 +204,7 @@ class SatelliteTracker:
         self.last_satellite_visible = False
         self.last_control_error = None
         self.last_command_skipped_time = 0.0
+        self.last_gimbal_command_time = 0.0
         
         # 后端不再需要星座URL配置，由前端负责下载
         
@@ -400,6 +406,7 @@ class SatelliteTracker:
 
         azimuth_delta = abs(azimuth - self.current_azimuth)
         elevation_delta = abs(elevation - self.current_elevation)
+        max_delta = max(azimuth_delta, elevation_delta)
         if (
             not force and
             GIMBAL_COMMAND_DEADBAND_DEGREES > 0 and
@@ -410,6 +417,26 @@ class SatelliteTracker:
             if now - self.last_command_skipped_time >= 5:
                 print(
                     f"[DEBUG] 角度变化小于死区 {GIMBAL_COMMAND_DEADBAND_DEGREES:.3f}°，跳过本次云台指令 "
+                    f"(Δ方位={azimuth_delta:.3f}°, Δ仰角={elevation_delta:.3f}°)"
+                )
+                self.last_command_skipped_time = now
+            return False
+
+        now_monotonic = time.monotonic()
+        command_interval = now_monotonic - self.last_gimbal_command_time
+        if (
+            not force and
+            GIMBAL_MIN_COMMAND_INTERVAL > 0 and
+            self.last_gimbal_command_time > 0 and
+            command_interval < GIMBAL_MIN_COMMAND_INTERVAL and
+            max_delta < GIMBAL_FORCE_COMMAND_DEGREES
+        ):
+            now = time.time()
+            if now - self.last_command_skipped_time >= 5:
+                print(
+                    f"[DEBUG] 距上次云台指令 {command_interval:.3f}s，小于最小间隔 "
+                    f"{GIMBAL_MIN_COMMAND_INTERVAL:.3f}s，且误差未超过强制下发阈值 "
+                    f"{GIMBAL_FORCE_COMMAND_DEGREES:.3f}°，跳过本次指令 "
                     f"(Δ方位={azimuth_delta:.3f}°, Δ仰角={elevation_delta:.3f}°)"
                 )
                 self.last_command_skipped_time = now
@@ -450,6 +477,7 @@ class SatelliteTracker:
         if command_accepted:
             self.current_azimuth = azimuth
             self.current_elevation = elevation
+            self.last_gimbal_command_time = now_monotonic
             print(f"[DEBUG] 当前云台位置已更新: 方位角={azimuth:.2f}°, 仰角={elevation:.2f}°")
         return command_accepted
 
@@ -604,6 +632,7 @@ class SatelliteTracker:
         self.last_satellite_visible = False
         self.last_control_error = None
         self.last_command_skipped_time = 0.0
+        self.last_gimbal_command_time = 0.0
         print(f"[DEBUG] 云台朝向设置: {gimbal_direction}")
         
         if simulation_mode and start_time:
