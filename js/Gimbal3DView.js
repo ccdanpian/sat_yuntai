@@ -279,7 +279,7 @@ class Gimbal3DView {
 
         const pivot = new THREE.Vector3(0, 0.66, 0);
         const length = 1.55;
-        const az = THREE.MathUtils.degToRad(azimuth);
+        const az = THREE.MathUtils.degToRad(azimuth + 180);
         const el = THREE.MathUtils.degToRad(Math.max(-30, Math.min(90, elevation)));
         const horizontal = Math.cos(el) * length;
         const end = new THREE.Vector3(

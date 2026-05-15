@@ -12,7 +12,7 @@ class EphemerisManager {
         const select = document.getElementById('constellation');
         if (!select) return;
 
-        const selectedValue = select.value || 'x2';
+        const selectedValue = select.value || 'x2-3';
 
         try {
             const response = await this.tracker.apiFetch('/api/constellations');
@@ -64,8 +64,8 @@ class EphemerisManager {
         });
 
         const hasPreviousValue = options.some(optionData => optionData.id === selectedValue);
-        const hasDefaultX2 = options.some(optionData => optionData.id === 'x2');
-        select.value = hasPreviousValue ? selectedValue : (hasDefaultX2 ? 'x2' : options[0].id);
+        const hasDefaultX23 = options.some(optionData => optionData.id === 'x2-3');
+        select.value = hasPreviousValue ? selectedValue : (hasDefaultX23 ? 'x2-3' : options[0].id);
     }
     
     setupLocalFileLoader() {
@@ -328,10 +328,17 @@ class EphemerisManager {
             satelliteSelect.appendChild(option);
         });
         
-        satelliteSelect.disabled = false;
-        satelliteSelect.addEventListener('change', () => {
+        satelliteSelect.disabled = this.tracker.satellites.length === 0;
+        if (this.tracker.satellites.length > 0) {
+            satelliteSelect.value = '0';
+            document.getElementById('controlBtn').disabled = false;
+        } else {
+            document.getElementById('controlBtn').disabled = true;
+        }
+
+        satelliteSelect.onchange = () => {
             document.getElementById('controlBtn').disabled = satelliteSelect.value === '';
-        });
+        };
     }
     
     saveToFile(data, filename) {
@@ -367,8 +374,8 @@ class EphemerisManager {
         this.tracker.satellites = [];
     }
     
-    // 自动下载x2星座星历数据
-    async autoDownloadX2Ephemeris() {
+    // 自动下载默认星座星历数据
+    async autoDownloadDefaultEphemeris() {
         try {
             // 等待页面完全加载
             await new Promise(resolve => {
@@ -379,10 +386,10 @@ class EphemerisManager {
                 }
             });
             
-            // 确保x2星座已选中
+            // 确保默认星座已选中
             const constellationSelect = document.getElementById('constellation');
-            if (constellationSelect && constellationSelect.value === 'x2') {
-                this.tracker.addLog('自动开始下载X2星座星历数据');
+            if (constellationSelect && constellationSelect.value === 'x2-3') {
+                this.tracker.addLog('自动开始下载X2-3星座星历数据');
                 await this.downloadEphemeris();
             }
         } catch (error) {

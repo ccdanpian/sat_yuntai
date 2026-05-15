@@ -117,9 +117,9 @@ class SatelliteTracker {
             }
         }
         
-        // 同步后端支持的星座后自动下载x2星座星历数据
+        // 同步后端支持的星座后自动下载默认星座星历数据
         this.ephemerisManager.loadConstellationOptions()
-            .finally(() => this.ephemerisManager.autoDownloadX2Ephemeris());
+            .finally(() => this.ephemerisManager.autoDownloadDefaultEphemeris());
     }
     
     // 日志记录方法
