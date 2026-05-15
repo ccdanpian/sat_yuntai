@@ -223,6 +223,30 @@
     </div>
     
     <script>
+        async function apiFetch(url, options = {}) {
+            const requestOptions = { ...options };
+            const headers = new Headers(requestOptions.headers || {});
+            const storedToken = localStorage.getItem('satYuntaiApiToken') || '';
+
+            if (storedToken) {
+                headers.set('X-API-Token', storedToken);
+            }
+
+            requestOptions.headers = headers;
+            let response = await fetch(url, requestOptions);
+
+            if (response.status === 401) {
+                const token = window.prompt('请输入云台控制令牌');
+                if (token) {
+                    localStorage.setItem('satYuntaiApiToken', token.trim());
+                    headers.set('X-API-Token', token.trim());
+                    response = await fetch(url, requestOptions);
+                }
+            }
+
+            return response;
+        }
+
         function addLog(message, type = 'info') {
             const log = document.getElementById('log');
             const timestamp = new Date().toLocaleTimeString();
@@ -237,7 +261,7 @@
             try {
                 addLog(`${enable ? '开启' : '关闭'}舵机扭矩锁...`);
                 
-                const response = await fetch('/api/calibration/torque', {
+                const response = await apiFetch('/api/calibration/torque', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -264,7 +288,7 @@
             try {
                 addLog('设置舵机中位...');
                 
-                const response = await fetch('/api/calibration/set_center', {
+                const response = await apiFetch('/api/calibration/set_center', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -297,7 +321,7 @@
                 
                 addLog(`测试云台移动: 方位角${azimuth}°, 仰角${elevation}°`);
                 
-                const response = await fetch('/api/calibration/test', {
+                const response = await apiFetch('/api/calibration/test', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

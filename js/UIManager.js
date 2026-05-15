@@ -13,6 +13,13 @@ class UIManager {
         document.getElementById('constellation').addEventListener('change', () => {
             this.tracker.ephemerisManager.autoDownloadOnConstellationChange();
         });
+
+        const refreshEphemerisBtn = document.getElementById('refreshEphemerisBtn');
+        if (refreshEphemerisBtn) {
+            refreshEphemerisBtn.addEventListener('click', () => {
+                this.tracker.ephemerisManager.downloadEphemeris(true);
+            });
+        }
         
 
         

@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+
+.venv/
+venv/
+
+tle/*.tle
+ssl/*.key
+ssl/*.csr
+
+*.log
+port-info.txt

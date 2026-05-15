@@ -22,6 +22,13 @@ class SatelliteTracker {
         // 检查是否开启debug模式
         const urlParams = new URLSearchParams(window.location.search);
         this.debugMode = urlParams.get('debug') === '1';
+        this.apiToken = localStorage.getItem('satYuntaiApiToken') || '';
+        const apiTokenFromUrl = urlParams.get('apiToken');
+        if (apiTokenFromUrl) {
+            this.apiToken = apiTokenFromUrl;
+            localStorage.setItem('satYuntaiApiToken', apiTokenFromUrl);
+        }
+        this.apiTokenPrompted = false;
         
         // 星座URL配置
         this.constellationUrls = {
@@ -36,6 +43,19 @@ class SatelliteTracker {
             'globalstar': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=globalstar&FORMAT=tle',
             'x2': 'https://celestrak.org/NORAD/elements/gp.php?INTDES=2025-067&FORMAT=tle',
             'x2-3': 'https://celestrak.org/NORAD/elements/gp.php?INTDES=2026-091&FORMAT=tle'
+        };
+        this.constellationLabels = {
+            'gps': 'GPS',
+            'glonass': 'GLONASS',
+            'galileo': 'Galileo',
+            'beidou': '北斗',
+            'starlink': '星链',
+            'starlink_dtc': '星链DTC',
+            'oneweb': 'OneWeb',
+            'iridium': '铱星',
+            'globalstar': '全球星',
+            'x2': 'X2星座',
+            'x2-3': 'X2-3星座'
         };
 
         // X2 系列使用国际代号精确筛选，并按 sat 项目的规则处理显示名称
@@ -95,8 +115,9 @@ class SatelliteTracker {
             }
         }
         
-        // 自动下载x2星座星历数据
-        this.ephemerisManager.autoDownloadX2Ephemeris();
+        // 同步后端支持的星座后自动下载x2星座星历数据
+        this.ephemerisManager.loadConstellationOptions()
+            .finally(() => this.ephemerisManager.autoDownloadX2Ephemeris());
     }
     
     // 日志记录方法
@@ -110,7 +131,7 @@ class SatelliteTracker {
                 console.log(`[${timestamp}] ${message}`);
             }
             
-            const logContainer = document.getElementById('logContainer');
+            const logContainer = document.getElementById('debugLog') || document.getElementById('logContainer');
             if (!logContainer) return;
             
             const logEntry = document.createElement('div');
@@ -135,7 +156,7 @@ class SatelliteTracker {
     
     // 状态更新方法
     updateStatus(message) {
-        const statusText = document.getElementById('statusText');
+        const statusText = document.getElementById('statusText') || document.getElementById('status');
         if (statusText) {
             statusText.textContent = message;
         }
@@ -143,6 +164,32 @@ class SatelliteTracker {
         if (this.debugMode) {
             console.log(`[STATUS] ${message}`);
         }
+    }
+
+    async apiFetch(url, options = {}) {
+        const requestOptions = { ...options };
+        const headers = new Headers(requestOptions.headers || {});
+
+        if (this.apiToken) {
+            headers.set('X-API-Token', this.apiToken);
+        }
+
+        requestOptions.headers = headers;
+        let response = await fetch(url, requestOptions);
+
+        if (response.status === 401 && !this.apiTokenPrompted) {
+            this.apiTokenPrompted = true;
+            const token = window.prompt('请输入云台控制令牌');
+            if (token) {
+                this.apiToken = token.trim();
+                localStorage.setItem('satYuntaiApiToken', this.apiToken);
+                headers.set('X-API-Token', this.apiToken);
+                response = await fetch(url, requestOptions);
+            }
+            this.apiTokenPrompted = false;
+        }
+
+        return response;
     }
 }
 

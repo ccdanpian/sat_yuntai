@@ -19,7 +19,7 @@ class StatusManager {
     
     // 更新状态信息
     updateStatus(message) {
-        const statusElement = document.getElementById('status');
+        const statusElement = document.getElementById('statusText') || document.getElementById('status');
         if (statusElement) {
             statusElement.textContent = message;
         }
@@ -88,19 +88,24 @@ class StatusManager {
     // 检查云台状态
     async checkGimbalStatus() {
         try {
-            const response = await fetch('/api/gimbal_status');
+            const response = await this.tracker.apiFetch('/api/gimbal_status');
             const gimbalStatusElement = document.getElementById('gimbalStatus');
             
             if (response.ok) {
                 const data = await response.json();
+                const controller = data.controller || {};
+                const controlError = controller.last_error || data.last_control_error || '';
                 if (data.status === 'error' || data.status === 'disconnected') {
                     // 更新状态显示
-                    gimbalStatusElement.textContent = '🔧 云台初始化失败';
+                    gimbalStatusElement.textContent = controlError ? `🔧 云台异常: ${controlError}` : '🔧 云台初始化失败';
                     gimbalStatusElement.className = 'status-item error';
-                    this.updateStatus('云台连接失败，将使用模拟模式');
+                    this.updateStatus(controlError ? `云台连接异常: ${controlError}` : '云台连接失败，将使用模拟模式');
                 } else {
                     // 更新状态显示
-                    gimbalStatusElement.textContent = '✅ 云台连接正常';
+                    const droppedCommands = Number(controller.dropped_commands || 0);
+                    gimbalStatusElement.textContent = droppedCommands > 0
+                        ? `✅ 云台连接正常，已丢弃旧指令 ${droppedCommands} 条`
+                        : '✅ 云台连接正常';
                     gimbalStatusElement.className = 'status-item success';
                     this.updateStatus('云台连接正常');
                 }

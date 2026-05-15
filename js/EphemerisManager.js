@@ -7,6 +7,66 @@ class EphemerisManager {
         this.tracker = tracker;
         this.setupLocalFileLoader();
     }
+
+    async loadConstellationOptions() {
+        const select = document.getElementById('constellation');
+        if (!select) return;
+
+        const selectedValue = select.value || 'x2';
+
+        try {
+            const response = await this.tracker.apiFetch('/api/constellations');
+            if (!response.ok) {
+                throw new Error(`后端星座列表接口失败: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            const options = this.normalizeConstellationOptions(data.constellations);
+            if (options.length === 0) {
+                throw new Error('后端星座列表为空');
+            }
+
+            this.renderConstellationOptions(select, options, selectedValue);
+            this.tracker.addLog(`已同步后端星座列表，共 ${options.length} 个`);
+        } catch (error) {
+            this.tracker.addLog(`同步星座列表失败，保留页面默认列表: ${error.message}`, 'error');
+        }
+    }
+
+    normalizeConstellationOptions(rawOptions) {
+        const source = Array.isArray(rawOptions) ? rawOptions : [];
+        return source
+            .map(item => {
+                if (typeof item === 'string') {
+                    return {
+                        id: item,
+                        label: this.tracker.constellationLabels[item] || item
+                    };
+                }
+
+                if (!item || !item.id) return null;
+                return {
+                    id: item.id,
+                    label: item.label || this.tracker.constellationLabels[item.id] || item.id
+                };
+            })
+            .filter(Boolean);
+    }
+
+    renderConstellationOptions(select, options, selectedValue) {
+        select.innerHTML = '<option value="">请选择星座</option>';
+
+        options.forEach(optionData => {
+            const option = document.createElement('option');
+            option.value = optionData.id;
+            option.textContent = optionData.label;
+            select.appendChild(option);
+        });
+
+        const hasPreviousValue = options.some(optionData => optionData.id === selectedValue);
+        const hasDefaultX2 = options.some(optionData => optionData.id === 'x2');
+        select.value = hasPreviousValue ? selectedValue : (hasDefaultX2 ? 'x2' : options[0].id);
+    }
     
     setupLocalFileLoader() {
         // 创建文件选择器
@@ -78,7 +138,7 @@ class EphemerisManager {
         }
     }
     
-    async downloadEphemeris() {
+    async downloadEphemeris(forceRefresh = false) {
         const constellation = document.getElementById('constellation').value;
         if (!constellation) {
             this.tracker.addLog('请先选择星座', 'error');
@@ -95,37 +155,9 @@ class EphemerisManager {
             this.tracker.updateStatus(`正在下载 ${constellation} 星历数据...`);
             this.tracker.statusManager.updateStatusDisplay('satelliteStatus', '📡 加载卫星', 'warning');
             this.tracker.addLog(`开始下载 ${constellation} 星历数据`);
-            
-            // 检查缓存
-            const cacheKey = `ephemeris_${constellation}`;
-            const lastUpdate = localStorage.getItem(`${cacheKey}_timestamp`);
-            const now = Date.now();
-            const twentyFourHours = 24 * 60 * 60 * 1000;
-            
-            let ephemerisData;
-            
-            if (lastUpdate && (now - parseInt(lastUpdate)) < twentyFourHours) {
-                this.tracker.addLog('使用缓存的星历数据（24小时内已更新）');
-                ephemerisData = localStorage.getItem(cacheKey);
-                progressBar.style.width = '100%';
-            } else {
-                // 前端直接下载星历数据
-                const url = this.tracker.constellationUrls[constellation];
-                const response = await fetch(url);
-                
-                if (!response.ok) {
-                    throw new Error(`下载失败: ${response.statusText}`);
-                }
-                
-                ephemerisData = await response.text();
-                progressBar.style.width = '100%';
-                
-                // 保存到缓存
-                localStorage.setItem(cacheKey, ephemerisData);
-                localStorage.setItem(`${cacheKey}_timestamp`, now.toString());
-                
-                this.tracker.addLog('星历数据下载完成并已缓存');
-            }
+
+            let ephemerisData = await this.loadEphemerisFromBackend(constellation, forceRefresh);
+            progressBar.style.width = '100%';
             
             // 解析和筛选卫星
             await this.processSatellites(constellation, ephemerisData);
@@ -144,6 +176,55 @@ class EphemerisManager {
         } finally {
             progressDiv.style.display = 'none';
         }
+    }
+
+    async loadEphemerisFromBackend(constellation, forceRefresh = false) {
+        const refreshParam = forceRefresh ? '?refresh=1' : '';
+        try {
+            const response = await this.tracker.apiFetch(`/api/ephemeris/${encodeURIComponent(constellation)}${refreshParam}`);
+            if (!response.ok) {
+                throw new Error(`后端星历接口失败: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            if (!data.tle) {
+                throw new Error('后端返回的星历数据为空');
+            }
+
+            const sourceText = data.source === 'network' ? '网络更新' : '本地缓存';
+            this.tracker.addLog(`后端星历加载完成: ${sourceText}`);
+            return data.tle;
+        } catch (backendError) {
+            this.tracker.addLog(`后端星历加载失败，尝试浏览器直连: ${backendError.message}`, 'error');
+            return this.loadEphemerisFromBrowser(constellation, forceRefresh);
+        }
+    }
+
+    async loadEphemerisFromBrowser(constellation, forceRefresh = false) {
+        const cacheKey = `ephemeris_${constellation}`;
+        const lastUpdate = localStorage.getItem(`${cacheKey}_timestamp`);
+        const now = Date.now();
+        const twentyFourHours = 24 * 60 * 60 * 1000;
+
+        const cachedData = localStorage.getItem(cacheKey);
+        if (!forceRefresh && cachedData && lastUpdate && (now - parseInt(lastUpdate)) < twentyFourHours) {
+            this.tracker.addLog('使用浏览器缓存的星历数据（24小时内已更新）');
+            return cachedData;
+        }
+
+        const url = this.tracker.constellationUrls[constellation];
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error(`下载失败: ${response.statusText}`);
+        }
+
+        const ephemerisData = await response.text();
+        localStorage.setItem(cacheKey, ephemerisData);
+        localStorage.setItem(`${cacheKey}_timestamp`, now.toString());
+
+        this.tracker.addLog('浏览器直连星历数据下载完成并已缓存');
+        return ephemerisData;
     }
     
     async processSatellites(constellation, ephemerisData) {

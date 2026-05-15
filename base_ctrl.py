@@ -133,7 +133,11 @@ class BaseController:
 	def __init__(self, uart_dev_set, buad_set):
 		self.ser = serial.Serial(uart_dev_set, buad_set, timeout=1)
 		self.rl = ReadLine(self.ser)
-		self.command_queue = queue.Queue()
+		self.command_queue = queue.Queue(maxsize=20)
+		self.connected = True
+		self.last_error = None
+		self.last_command_time = None
+		self.dropped_commands = 0
 		self.command_thread = threading.Thread(target=self.process_commands, daemon=True)
 		self.command_thread.start()
 
@@ -173,13 +177,42 @@ class BaseController:
 
 
 	def send_command(self, data):
-		self.command_queue.put(data)
+		if not self.connected:
+			raise RuntimeError(self.last_error or "云台串口连接不可用")
+
+		try:
+			self.command_queue.put_nowait(data)
+		except queue.Full:
+			try:
+				self.command_queue.get_nowait()
+				self.dropped_commands += 1
+			except queue.Empty:
+				pass
+			self.command_queue.put_nowait(data)
 
 
 	def process_commands(self):
 		while True:
 			data = self.command_queue.get()
-			self.ser.write((json.dumps(data) + '\n').encode("utf-8"))
+			try:
+				self.ser.write((json.dumps(data) + '\n').encode("utf-8"))
+				self.ser.flush()
+				self.last_command_time = time.time()
+			except Exception as e:
+				self.connected = False
+				self.last_error = f"串口写入失败: {e}"
+				print(f"[base_ctrl.process_commands] error: {self.last_error}")
+				break
+
+
+	def get_status(self):
+		return {
+			"connected": self.connected,
+			"last_error": self.last_error,
+			"last_command_time": self.last_command_time,
+			"queued_commands": self.command_queue.qsize(),
+			"dropped_commands": self.dropped_commands
+		}
 
 
 	def base_json_ctrl(self, input_json):

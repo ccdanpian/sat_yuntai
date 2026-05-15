@@ -5,15 +5,18 @@ import asyncio
 import json
 import time
 import threading
+import os
+from functools import wraps
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple
 import math
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, abort
 from flask_cors import CORS
 from skyfield.api import load, Topos, utc, wgs84
 from skyfield.sgp4lib import EarthSatellite
 import numpy as np
+import requests
 
 # 添加serial模块导入，base_ctrl.py需要使用
 try:
@@ -36,8 +39,146 @@ except ImportError:
     print("警告: calibration模块未找到，中位设置功能将不可用")
     create_calibration_instance = None
 
+def load_local_env(path: str = '.env'):
+    """Load simple KEY=value entries before reading runtime configuration."""
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, 'r', encoding='utf-8') as env_file:
+            for raw_line in env_file:
+                line = raw_line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except Exception as e:
+        print(f"[WARNING] 加载.env失败: {e}")
+
+load_local_env()
+
+def get_float_env(name: str, default: float) -> float:
+    raw_value = os.getenv(name, str(default))
+    try:
+        return float(raw_value)
+    except ValueError:
+        print(f"[WARNING] {name}={raw_value} 不是有效数字，使用默认值 {default}")
+        return default
+
+def get_int_env(name: str, default: int) -> int:
+    raw_value = os.getenv(name, str(default))
+    try:
+        return int(raw_value)
+    except ValueError:
+        print(f"[WARNING] {name}={raw_value} 不是有效整数，使用默认值 {default}")
+        return default
+
 app = Flask(__name__)
-CORS(app)
+
+cors_origins = os.getenv('SAT_YUNTAI_CORS_ORIGINS', '').strip()
+if cors_origins:
+    CORS(app, origins=[origin.strip() for origin in cors_origins.split(',') if origin.strip()])
+
+API_TOKEN = os.getenv('SAT_YUNTAI_API_TOKEN', '').strip()
+ALLOWED_STATIC_FILES = {'app.js'}
+ALLOWED_STATIC_DIRS = {'css', 'js'}
+TLE_CACHE_DIR = os.getenv('SAT_YUNTAI_TLE_CACHE_DIR', 'tle')
+TLE_REFRESH_INTERVAL = timedelta(days=get_float_env('TLE_UPDATE_INTERVAL', 1))
+
+CONSTELLATION_URLS = {
+    'gps': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=gps-ops&FORMAT=tle',
+    'glonass': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=glonass-ops&FORMAT=tle',
+    'galileo': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=galileo&FORMAT=tle',
+    'beidou': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=beidou&FORMAT=tle',
+    'starlink': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle',
+    'starlink_dtc': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle',
+    'oneweb': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=oneweb&FORMAT=tle',
+    'iridium': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=iridium&FORMAT=tle',
+    'globalstar': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=globalstar&FORMAT=tle',
+    'x2': 'https://celestrak.org/NORAD/elements/gp.php?INTDES=2025-067&FORMAT=tle',
+    'x2-3': 'https://celestrak.org/NORAD/elements/gp.php?INTDES=2026-091&FORMAT=tle'
+}
+CONSTELLATION_LABELS = {
+    'gps': 'GPS',
+    'glonass': 'GLONASS',
+    'galileo': 'Galileo',
+    'beidou': '北斗',
+    'starlink': '星链',
+    'starlink_dtc': '星链DTC',
+    'oneweb': 'OneWeb',
+    'iridium': '铱星',
+    'globalstar': '全球星',
+    'x2': 'X2星座',
+    'x2-3': 'X2-3星座'
+}
+MIN_VISIBLE_ELEVATION = get_float_env('MIN_VISIBLE_ELEVATION', 5)
+MIN_PASS_MAX_ELEVATION = get_float_env('MIN_PASS_MAX_ELEVATION', 30)
+
+def require_api_token(func):
+    """Protect hardware-changing API endpoints when SAT_YUNTAI_API_TOKEN is set."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if API_TOKEN:
+            provided_token = request.headers.get('X-API-Token', '')
+            if provided_token != API_TOKEN:
+                return jsonify({'error': '未授权的控制请求'}), 401
+        return func(*args, **kwargs)
+    return wrapper
+
+def get_tle_cache_path(constellation: str) -> str:
+    safe_name = constellation.replace('/', '_').replace('\\', '_')
+    return os.path.join(TLE_CACHE_DIR, f'{safe_name}.tle')
+
+def load_tle_text(constellation: str, force_refresh: bool = False) -> Dict:
+    constellation = constellation.lower()
+    if constellation not in CONSTELLATION_URLS:
+        raise ValueError(f'不支持的星座: {constellation}')
+
+    os.makedirs(TLE_CACHE_DIR, exist_ok=True)
+    cache_path = get_tle_cache_path(constellation)
+    now = datetime.now(timezone.utc)
+    cache_exists = os.path.exists(cache_path)
+    cache_age = None
+
+    if cache_exists:
+        cache_mtime = datetime.fromtimestamp(os.path.getmtime(cache_path), tz=timezone.utc)
+        cache_age = now - cache_mtime
+
+    should_refresh = force_refresh or not cache_exists or (cache_age is not None and cache_age >= TLE_REFRESH_INTERVAL)
+
+    if should_refresh:
+        try:
+            response = requests.get(CONSTELLATION_URLS[constellation], timeout=30)
+            response.raise_for_status()
+            tle_text = response.text.strip() + '\n'
+            with open(cache_path, 'w', encoding='utf-8') as tle_file:
+                tle_file.write(tle_text)
+            return {
+                'constellation': constellation,
+                'tle': tle_text,
+                'source': 'network',
+                'cached': False,
+                'cacheAgeSeconds': 0
+            }
+        except Exception as e:
+            if not cache_exists:
+                raise RuntimeError(f'下载星历失败且无本地缓存: {e}')
+            print(f"[WARNING] 下载 {constellation} 星历失败，使用本地缓存: {e}")
+
+    with open(cache_path, 'r', encoding='utf-8') as tle_file:
+        tle_text = tle_file.read()
+
+    cache_mtime = datetime.fromtimestamp(os.path.getmtime(cache_path), tz=timezone.utc)
+    return {
+        'constellation': constellation,
+        'tle': tle_text,
+        'source': 'cache',
+        'cached': True,
+        'cacheAgeSeconds': int((now - cache_mtime).total_seconds())
+    }
 
 class SatelliteTracker:
     def __init__(self):
@@ -51,6 +192,8 @@ class SatelliteTracker:
         self.current_elevation = 0.0
         self.gimbal_controller = None
         self.trajectory_points = []  # 存储轨迹点数据
+        self.last_satellite_visible = False
+        self.last_control_error = None
         
         # 后端不再需要星座URL配置，由前端负责下载
         
@@ -61,7 +204,7 @@ class SatelliteTracker:
         self.calibration = None
         if create_calibration_instance:
             # 复用现有的云台控制器实例
-            self.calibration = create_calibration_instance(self.gimbal_controller)
+            self.calibration = create_calibration_instance(self.gimbal_controller, auto_init=False)
             print("中位设置模块初始化完成")
         else:
             print("警告: 中位设置模块未初始化")
@@ -226,6 +369,17 @@ class SatelliteTracker:
             print(f"[ERROR] 方位角转换失败: {e}")
             return azimuth, "unknown"
     
+    def parse_tracking_start_time(self, start_time: str) -> datetime:
+        """解析前端传来的强制时间。
+
+        新前端传 UTC ISO；旧前端可能传无时区 datetime-local 字符串，兼容按北京时间处理。
+        """
+        parsed_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+        if parsed_time.tzinfo is None:
+            beijing_tz = timezone(timedelta(hours=8))
+            parsed_time = parsed_time.replace(tzinfo=beijing_tz)
+        return parsed_time.astimezone(timezone.utc)
+
 
     
     def control_gimbal(self, azimuth: float, elevation: float, current_time=None):
@@ -246,23 +400,41 @@ class SatelliteTracker:
         if original_azimuth != azimuth or original_elevation != elevation:
             print(f"[DEBUG] 角度限制调整 - 调整后: 方位角={azimuth:.2f}°, 仰角={elevation:.2f}°")
 
+        command_accepted = False
         if self.gimbal_controller:
             try:
                 print(f"[DEBUG] 发送云台控制指令到硬件设备")
                 # 使用base_ctrl.py提供的gimbal_ctrl方法
                 # 参数: x(方位角), y(仰角), speed(速度), acceleration(加速度)
                 self.gimbal_controller.gimbal_ctrl(azimuth, elevation, 10, 0)
+                self.last_control_error = None
+                command_accepted = True
                 print(f"[INFO] 云台控制指令发送成功: 方位角={azimuth:.2f}°, 仰角={elevation:.2f}°")
             except Exception as e:
+                self.last_control_error = str(e)
                 print(f"[ERROR] 云台控制失败: {e}")
                 print(f"[ERROR] 控制参数: 方位角={azimuth:.2f}°, 仰角={elevation:.2f}°")
         else:
             print(f"[INFO] 后端模拟控制: 方位角={azimuth:.2f}°, 仰角={elevation:.2f}°")
+            self.last_control_error = None
+            command_accepted = True
         
-        # 更新当前位置
-        self.current_azimuth = azimuth
-        self.current_elevation = elevation
-        print(f"[DEBUG] 当前云台位置已更新: 方位角={azimuth:.2f}°, 仰角={elevation:.2f}°")
+        # 只有命令被接受后才更新后端显示位置；真实位置仍应以硬件反馈为准。
+        if command_accepted:
+            self.current_azimuth = azimuth
+            self.current_elevation = elevation
+            print(f"[DEBUG] 当前云台位置已更新: 方位角={azimuth:.2f}°, 仰角={elevation:.2f}°")
+
+    def park_gimbal_if_needed(self, current_time=None, loop_count: int = 0):
+        """卫星不可见时只发送一次归零指令，避免重复刷串口。"""
+        already_parked = abs(self.current_azimuth) < 0.01 and abs(self.current_elevation) < 0.01
+        if self.last_satellite_visible or not already_parked:
+            print(f"[INFO] 卫星不可见，云台归零")
+            self.control_gimbal(0, 0, current_time)
+        elif loop_count % 30 == 1:
+            print(f"[INFO] 卫星不可见，云台保持零位")
+
+        self.last_satellite_visible = False
     
     def tracking_loop(self):
         """跟踪循环"""
@@ -299,8 +471,8 @@ class SatelliteTracker:
                         convert_azimuth=False  # 先获取原始方位角
                     )
                     
-                    # 检查卫星是否可见（仰角大于5度）
-                    is_visible = elevation > 5
+                    # 检查卫星是否可见
+                    is_visible = elevation > MIN_VISIBLE_ELEVATION
                     
                     if is_visible:
                         print(f"[INFO] 卫星可见，正在跟踪 - 方位角: {azimuth:.2f}°, 仰角: {elevation:.2f}°")
@@ -318,10 +490,9 @@ class SatelliteTracker:
                         
                         # 控制云台跟踪卫星
                         self.control_gimbal(azimuth, elevation, current_time)
+                        self.last_satellite_visible = True
                     else:
-                        print(f"[INFO] 卫星不可见，云台归零")
-                        # 控制云台归零
-                        self.control_gimbal(0, 0, current_time)
+                        self.park_gimbal_if_needed(current_time, loop_count)
                         
                 except Exception as calc_error:
                     print(f"[ERROR] 实时位置计算失败: {calc_error}")
@@ -354,9 +525,9 @@ class SatelliteTracker:
                                 current_azimuth += 360
                         
                         self.control_gimbal(current_azimuth, current_elevation, current_time)
+                        self.last_satellite_visible = True
                     else:
-                        print(f"[INFO] 卫星不可见，云台归零")
-                        self.control_gimbal(0, 0, current_time)
+                        self.park_gimbal_if_needed(current_time, loop_count)
                 
                 # 等待1秒
                 time.sleep(1)
@@ -398,18 +569,14 @@ class SatelliteTracker:
         self.simulation_mode = simulation_mode
         self.gimbal_direction = gimbal_direction
         self.trajectory_points = trajectory_points or []  # 保存轨迹点数据
+        self.last_satellite_visible = False
+        self.last_control_error = None
         print(f"[DEBUG] 云台朝向设置: {gimbal_direction}")
         
         if simulation_mode and start_time:
-            # 前端传递的是北京时间，需要转换为UTC时间
-            # 解析时间字符串（假设是北京时间）
-            parsed_time = datetime.fromisoformat(start_time.replace('Z', ''))
-            # 设置为北京时间（UTC+8）
+            self.simulation_start_time = self.parse_tracking_start_time(start_time)
             beijing_tz = timezone(timedelta(hours=8))
-            beijing_time = parsed_time.replace(tzinfo=beijing_tz)
-            # 转换为UTC时间
-            self.simulation_start_time = beijing_time.astimezone(timezone.utc)
-            print(f"[DEBUG] 强制时间模式开始时间 (北京时间): {beijing_time}")
+            print(f"[DEBUG] 强制时间模式开始时间 (北京时间): {self.simulation_start_time.astimezone(beijing_tz)}")
             print(f"[DEBUG] 强制时间模式开始时间 (UTC): {self.simulation_start_time}")
         else:
             self.simulation_start_time = datetime.now(timezone.utc)
@@ -450,6 +617,7 @@ class SatelliteTracker:
         print(f"[INFO] 云台复位中...")
         try:
             self.control_gimbal(0, 0)
+            self.last_satellite_visible = False
             print(f"[INFO] 云台已复位到零位")
         except Exception as e:
             print(f"[ERROR] 云台复位失败: {e}")
@@ -487,6 +655,21 @@ def index():
     """主页"""
     return send_from_directory('.', 'index.html')
 
+@app.route('/app.js')
+def app_js():
+    """主应用脚本"""
+    return send_from_directory('.', 'app.js')
+
+@app.route('/css/<path:filename>')
+def css_files(filename):
+    """CSS静态文件"""
+    return send_from_directory('css', filename)
+
+@app.route('/js/<path:filename>')
+def js_files(filename):
+    """JavaScript静态文件"""
+    return send_from_directory('js', filename)
+
 # 中位设置页面路由 - 必须在通用静态文件路由之前
 @app.route('/calibration')
 def calibration_page():
@@ -497,6 +680,7 @@ def calibration_page():
 
 # 校准相关API路由
 @app.route('/api/calibration/torque', methods=['POST'])
+@require_api_token
 def api_calibration_torque():
     """控制舵机扭矩锁"""
     try:
@@ -523,6 +707,7 @@ def api_calibration_torque():
         }), 500
 
 @app.route('/api/calibration/set_center', methods=['POST'])
+@require_api_token
 def api_calibration_set_center():
     """设置舵机中位"""
     try:
@@ -546,6 +731,7 @@ def api_calibration_set_center():
         }), 500
 
 @app.route('/api/calibration/test', methods=['POST'])
+@require_api_token
 def api_calibration_test():
     """测试校准"""
     try:
@@ -572,15 +758,37 @@ def api_calibration_test():
             'message': f'测试失败: {str(e)}'
         }), 500
 
-# 通用静态文件路由（保持在最后）
-@app.route('/<path:filename>')
-def static_files(filename):
-    """静态文件"""
-    return send_from_directory('.', filename)
+# 星历由后端下载和缓存，前端仍只把选中的单颗卫星TLE发给跟踪接口
 
-# 移除星历下载接口，改为接收前端传来的星历数据
+@app.route('/api/constellations')
+def api_constellations():
+    """获取后端支持的星座列表"""
+    return jsonify({
+        'constellations': [
+            {
+                'id': constellation,
+                'label': CONSTELLATION_LABELS.get(constellation, constellation.upper())
+            }
+            for constellation in CONSTELLATION_URLS.keys()
+        ],
+        'ids': list(CONSTELLATION_URLS.keys())
+    })
+
+@app.route('/api/ephemeris/<constellation>')
+def api_ephemeris(constellation):
+    """从后端缓存获取星历数据"""
+    try:
+        force_refresh = request.args.get('refresh') in {'1', 'true', 'yes'}
+        result = load_tle_text(constellation, force_refresh)
+        return jsonify(result)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        print(f"[API ERROR] 获取星历失败: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/start_tracking', methods=['POST'])
+@require_api_token
 def api_start_tracking():
     """开始跟踪API"""
     try:
@@ -625,6 +833,7 @@ def api_start_tracking():
         return jsonify({'error': error_msg}), 500
 
 @app.route('/api/stop_tracking', methods=['POST'])
+@require_api_token
 def api_stop_tracking():
     """停止跟踪API"""
     # print(f"[API] 收到POST请求: /api/stop_tracking")
@@ -645,9 +854,12 @@ def api_gimbal_status():
     try:
         # 检查云台控制器是否已初始化
         initialized = tracker.gimbal_controller is not None
+        controller_status = {}
+        if tracker.gimbal_controller and hasattr(tracker.gimbal_controller, 'get_status'):
+            controller_status = tracker.gimbal_controller.get_status()
         
         # 返回前端期望的状态格式
-        if initialized:
+        if initialized and controller_status.get('connected', True):
             status = 'success'
         else:
             status = 'disconnected'
@@ -655,7 +867,9 @@ def api_gimbal_status():
         return jsonify({
             'status': status,
             'initialized': initialized,
-            'simulation_mode': not initialized
+            'simulation_mode': not initialized,
+            'controller': controller_status,
+            'last_control_error': tracker.last_control_error
         })
     
     except Exception as e:
@@ -821,7 +1035,7 @@ def calculate_detailed_pass(satellite, ground_station, start_time, end_time):
             azimuth = az.degrees[i] if hasattr(az.degrees, '__len__') else az.degrees
             elevation = alt.degrees[i] if hasattr(alt.degrees, '__len__') else alt.degrees
             
-            is_visible = bool(elevation > 5)
+            is_visible = bool(elevation > MIN_VISIBLE_ELEVATION)
             
             point = {
                 'time': time_point.isoformat(),
@@ -840,7 +1054,7 @@ def calculate_detailed_pass(satellite, ground_station, start_time, end_time):
                     satellite, ground_station, time_point, convert_azimuth=False
                 )
                 
-                is_visible = bool(elevation > 5)
+                is_visible = bool(elevation > MIN_VISIBLE_ELEVATION)
                 
                 point = {
                     'time': time_point.isoformat(),
@@ -920,7 +1134,7 @@ def api_calculate_trajectory():
                 
             max_elevation = max(p['elevation'] for p in visible_points)
             
-            if max_elevation >= 30.0:
+            if max_elevation >= MIN_PASS_MAX_ELEVATION:
                 # 找到符合条件的过境事件
                 print(f"[API] 找到符合条件的过境事件: 最大仰角 {max_elevation:.2f}°")
                 
@@ -940,15 +1154,30 @@ def api_calculate_trajectory():
                 
                 return jsonify(result)
         
-        print(f"[API] 所有候选时间段的最大仰角都小于30°")
-        return jsonify({'error': '在24小时内未找到最大仰角>=30°的轨迹'}), 404
+        print(f"[API] 所有候选时间段的最大仰角都小于{MIN_PASS_MAX_ELEVATION}°")
+        return jsonify({'error': f'在24小时内未找到最大仰角>={MIN_PASS_MAX_ELEVATION}°的轨迹'}), 404
     
     except Exception as e:
         error_msg = str(e)
         print(f"[API ERROR] 轨迹计算失败: {error_msg}")
         return jsonify({'error': error_msg}), 500
 
+# 通用静态文件路由保持在所有明确路由之后。
+@app.route('/<path:filename>')
+def static_files(filename):
+    """只允许访问明确暴露的静态资源，避免泄露.env等项目文件"""
+    if filename in ALLOWED_STATIC_FILES:
+        return send_from_directory('.', filename)
+
+    parts = filename.split('/', 1)
+    if len(parts) == 2 and parts[0] in ALLOWED_STATIC_DIRS:
+        return send_from_directory(parts[0], parts[1])
+
+    abort(404)
+
 if __name__ == '__main__':
+    host = os.getenv('HOST', '0.0.0.0')
+    port = get_int_env('PORT', 15000)
     print("启动卫星跟踪云台控制系统...")
-    print("访问地址: http://localhost:15000")
-    app.run(host='0.0.0.0', port=15000, debug=False)
+    print(f"访问地址: http://localhost:{port}")
+    app.run(host=host, port=port, debug=False)

@@ -34,6 +34,8 @@
                     <input type="checkbox" id="saveToFile">
                     <label for="saveToFile">保存到本地文件</label>
                 </div>
+
+                <button type="button" id="refreshEphemerisBtn" class="btn-small">刷新星历</button>
                 
                 <div class="progress" id="downloadProgress" style="display: none;">
                     <div class="progress-bar" id="progressBar"></div>
@@ -103,6 +105,7 @@
         <div class="visualization">
             <div class="status-display">
                 <h3>📊 当前状态</h3>
+                <div id="statusText" class="status-text">等待操作...</div>
                 <div id="statusContainer">
                     <div class="status-item" id="satelliteStatus">🛰️ 加载卫星</div>
                     <div class="status-item error" id="gimbalStatus">🔧 云台初始化失败</div>

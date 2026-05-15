@@ -35,9 +35,20 @@ class TrackingController {
         const forceTimeMode = document.getElementById('simulationMode').checked;
         const startTime = document.getElementById('startTime').value;
         const gimbalDirection = document.getElementById('gimbalDirection').value;
+        const forceStartTime = forceTimeMode ? new Date(startTime) : null;
         
         if (isNaN(latitude) || isNaN(longitude) || isNaN(altitude)) {
             this.tracker.addLog('请填写正确的地面站坐标', 'error');
+            return;
+        }
+
+        if (forceTimeMode && !startTime) {
+            this.tracker.addLog('强制时间模式下请填写开始时间', 'error');
+            return;
+        }
+
+        if (forceTimeMode && Number.isNaN(forceStartTime.getTime())) {
+            this.tracker.addLog('强制时间格式无效', 'error');
             return;
         }
         
@@ -55,12 +66,29 @@ class TrackingController {
                 altitude: altitude
             },
             simulationMode: forceTimeMode,
-            startTime: forceTimeMode ? startTime : null,
+            startTime: forceTimeMode ? forceStartTime.toISOString() : null,
             gimbalDirection: gimbalDirection
         };
         
         try {
-            const response = await fetch('/api/start_tracking', {
+            document.getElementById('controlBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = true;
+
+            // 先计算轨迹，确认有可用过境后再启动真实云台控制
+            this.tracker.statusManager.updateStatusDisplay('trajectoryStatus', '🔍 搜索轨迹', 'warning');
+            const trajectoryData = await this.calculateAndDrawFullTrajectory(trackingData);
+            const hasUsableTrajectory = this.tracker.lastTrajectoryPoints &&
+                this.tracker.lastTrajectoryPoints.some(point => point.visible);
+
+            if (!trajectoryData || !hasUsableTrajectory) {
+                throw new Error('未找到可用可见轨迹，未启动云台');
+            }
+
+            trackingData.trajectoryPoints = this.tracker.lastTrajectoryPoints;
+            this.tracker.statusManager.updateStatusDisplay('trajectoryStatus', '✅ 轨迹计算完成', 'success');
+            this.tracker.statusManager.updateStatusDisplay('calculationStatus', '🧮 计算云台朝向建议', 'warning');
+
+            const response = await this.tracker.apiFetch('/api/start_tracking', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -73,7 +101,7 @@ class TrackingController {
             }
             
             this.tracker.isTracking = true;
-            this.tracker.forceTimeStartTime = forceTimeMode ? new Date(startTime) : new Date();
+            this.tracker.forceTimeStartTime = forceTimeMode ? new Date(trackingData.startTime) : new Date();
             
             document.getElementById('controlBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
@@ -81,13 +109,7 @@ class TrackingController {
             this.tracker.updateStatus(`正在跟踪卫星: ${satellite.name}`);
             this.tracker.statusManager.updateStatusDisplay('trackingStatus', '🎯 跟踪正常', 'success');
             this.tracker.addLog(`开始跟踪卫星: ${satellite.name} (${satellite.noradId})`);
-            
-            // 预先计算并绘制完整的过境轨迹
-            this.tracker.statusManager.updateStatusDisplay('trajectoryStatus', '🔍 搜索轨迹', 'warning');
-            await this.calculateAndDrawFullTrajectory(trackingData);
-            this.tracker.statusManager.updateStatusDisplay('trajectoryStatus', '✅ 轨迹计算完成', 'success');
-            this.tracker.statusManager.updateStatusDisplay('calculationStatus', '🧮 计算云台朝向建议', 'warning');
-            
+
             // 开始前端指向显示
             this.startFrontendDisplay(trackingData);
             
@@ -100,6 +122,15 @@ class TrackingController {
             }
             
         } catch (error) {
+            this.tracker.isTracking = false;
+            document.getElementById('controlBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            this.tracker.statusManager.updateStatusDisplay('trackingStatus', '⏹️ 未启动跟踪', 'warning');
+            const hasUsableTrajectory = this.tracker.lastTrajectoryPoints &&
+                this.tracker.lastTrajectoryPoints.some(point => point.visible);
+            if (!hasUsableTrajectory) {
+                this.tracker.statusManager.updateStatusDisplay('trajectoryStatus', '❌ 轨迹不可用', 'error');
+            }
             this.tracker.addLog(`启动跟踪失败: ${error.message}`, 'error');
         }
     }
@@ -109,7 +140,7 @@ class TrackingController {
             this.tracker.addLog('正在停止跟踪并复位云台...', 'info');
             this.tracker.statusManager.updateStatusDisplay('trackingStatus', '⏹️ 正在停止跟踪', 'warning');
             
-            const response = await fetch('/api/stop_tracking', {
+            const response = await this.tracker.apiFetch('/api/stop_tracking', {
                 method: 'POST'
             });
             
@@ -190,7 +221,7 @@ class TrackingController {
             const trajectoryData = await this.requestTrajectoryFromBackend(satellite, groundStation, startTime);
             if (!trajectoryData) {
                 this.tracker.addLog('后端轨迹计算失败', 'error');
-                return;
+                return null;
             }
             
             const trajectoryPoints = trajectoryData.trajectoryPoints || [];
@@ -272,13 +303,18 @@ class TrackingController {
                     if (maxElevationDisplay) maxElevationDisplay.textContent = '';
                     const actualStartTimeDisplay = document.getElementById('actualStartTimeDisplay');
                     if (actualStartTimeDisplay) actualStartTimeDisplay.textContent = '';
+                    return null;
                 }
             } else {
                 this.tracker.addLog('未获取到有效轨迹数据', 'error');
+                return null;
             }
+
+            return trajectoryData;
         } catch (error) {
             this.tracker.addLog(`轨迹计算失败: ${error.message}`, 'error');
             console.error('计算完整轨迹失败:', error);
+            return null;
         }
     }
     
@@ -295,7 +331,7 @@ class TrackingController {
             
             console.log('发送轨迹计算请求:', requestData);
             
-            const response = await fetch('/api/calculate_trajectory', {
+            const response = await this.tracker.apiFetch('/api/calculate_trajectory', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -349,7 +385,7 @@ class TrackingController {
             if (!this.tracker.isTracking) return;
             
             try {
-                const response = await fetch('/api/get_current_position');
+                const response = await this.tracker.apiFetch('/api/get_current_position');
                 if (response.ok) {
                     const data = await response.json();
                     this.updateGimbalDisplay(data.azimuth, data.elevation);

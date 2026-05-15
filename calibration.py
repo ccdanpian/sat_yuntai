@@ -17,14 +17,15 @@ except ImportError:
 class GimbalCalibration:
     """云台中位设置类"""
     
-    def __init__(self, gimbal_controller: Optional[BaseController] = None):
+    def __init__(self, gimbal_controller: Optional[BaseController] = None, auto_init: bool = True):
         """初始化
         
         Args:
             gimbal_controller: 云台控制器实例，如果为None则尝试自动初始化
+            auto_init: 是否在没有传入控制器时自动初始化串口
         """
         self.gimbal_controller = gimbal_controller
-        if self.gimbal_controller is None:
+        if self.gimbal_controller is None and auto_init:
             self._init_gimbal_controller()
     
     def _init_gimbal_controller(self):
@@ -164,13 +165,14 @@ class GimbalCalibration:
             }
 
 # 便捷函数
-def create_calibration_instance(gimbal_controller: Optional[BaseController] = None) -> GimbalCalibration:
+def create_calibration_instance(gimbal_controller: Optional[BaseController] = None, auto_init: bool = True) -> GimbalCalibration:
     """创建校准实例
     
     Args:
         gimbal_controller: 可选的云台控制器实例
+        auto_init: 是否在没有传入控制器时自动初始化串口
         
     Returns:
         GimbalCalibration实例
     """
-    return GimbalCalibration(gimbal_controller)
+    return GimbalCalibration(gimbal_controller, auto_init=auto_init)
