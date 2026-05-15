@@ -6,6 +6,18 @@ class LocationManager {
     constructor(tracker, statusManager = null) {
         this.tracker = tracker;
         this.statusManager = statusManager;
+        this.defaultLocationName = '雄安';
+        this.defaultLocations = [
+            { name: '北京', latitude: 39.9042, longitude: 116.4074, altitude: 0 },
+            { name: '涞水', latitude: 39.5373, longitude: 115.7055, altitude: 0 },
+            { name: '雄安', latitude: 39.0742, longitude: 116.0185, altitude: 0 },
+            { name: '库尔勒', latitude: 41.7259, longitude: 86.1746, altitude: 880 },
+            { name: '文昌', latitude: 19.62, longitude: 110.75, altitude: 40 },
+            { name: '澄迈', latitude: 19.9244, longitude: 110.1284, altitude: 70 },
+            { name: '石家庄', latitude: 38.056124, longitude: 114.361285, altitude: 0 },
+            { name: '上海', latitude: 31.2286, longitude: 121.4747, altitude: 5 },
+            { name: '成都', latitude: 30.66, longitude: 104.0633, altitude: 500 }
+        ];
         // 初始化状态变量
         this.isSaving = false;
         this.isHiding = false;
@@ -25,6 +37,12 @@ class LocationManager {
                 this.tracker.addLog('已加载地面站位置配置');
             } catch (e) {
                 this.tracker.addLog('加载地面站位置配置失败: ' + e.message);
+            }
+        } else {
+            const defaultLocation = this.getLocationByName(this.defaultLocationName);
+            if (defaultLocation) {
+                this.applyLocation(defaultLocation, false);
+                this.tracker.addLog(`已加载默认地面站位置: ${defaultLocation.name}`);
             }
         }
         
@@ -60,22 +78,15 @@ class LocationManager {
     
     // 加载保存的位置
     loadSavedLocations() {
-        const savedLocations = localStorage.getItem('savedLocations');
-        if (savedLocations) {
-            try {
-                const locations = JSON.parse(savedLocations);
-                this.updateLocationSelect(locations);
-                this.tracker.addLog(`已加载 ${locations.length} 个保存的位置`);
-            } catch (e) {
-                this.tracker.addLog('加载保存位置失败: ' + e.message);
-            }
-        }
+        const locations = this.getAllLocations();
+        this.updateLocationSelect(locations);
+        this.tracker.addLog(`已加载 ${locations.length} 个位置`);
     }
     
     // 更新位置选择下拉菜单
     updateLocationSelect(locations) {
         const locationSelect = document.getElementById('locationSelect');
-        locationSelect.innerHTML = '<option value="">选择保存的位置</option>';
+        locationSelect.innerHTML = '<option value="">选择预设位置</option>';
         
         locations.forEach(location => {
             const option = document.createElement('option');
@@ -83,28 +94,121 @@ class LocationManager {
             option.textContent = `${location.name} (${location.latitude}, ${location.longitude})`;
             locationSelect.appendChild(option);
         });
+
+        const matchedLocationName = this.getMatchingLocationName(locations);
+        if (matchedLocationName) {
+            locationSelect.value = matchedLocationName;
+        }
     }
     
     // 选择位置
     selectLocation(locationName) {
         if (!locationName) return;
         
-        const savedLocations = localStorage.getItem('savedLocations');
-        if (savedLocations) {
-            try {
-                const locations = JSON.parse(savedLocations);
-                const location = locations.find(loc => loc.name === locationName);
-                if (location) {
-                    document.getElementById('latitude').value = location.latitude;
-                    document.getElementById('longitude').value = location.longitude;
-                    document.getElementById('altitude').value = location.altitude || '';
-                    // 不再设置云台朝向，保持当前云台配置不变
-                    this.saveGroundStationConfig();
-                    this.tracker.addLog(`已选择位置: ${location.name}`);
-                }
-            } catch (e) {
-                this.tracker.addLog('选择位置失败: ' + e.message);
+        const location = this.getLocationByName(locationName);
+        if (location) {
+            this.applyLocation(location);
+            this.tracker.addLog(`已选择位置: ${location.name}`);
+        }
+    }
+
+    normalizeLocations(locations) {
+        const source = Array.isArray(locations) ? locations : [];
+        const normalized = [];
+
+        for (const location of source) {
+            if (!location || typeof location.name !== 'string') continue;
+
+            const name = location.name.trim();
+            const latitude = Number(location.latitude);
+            const longitude = Number(location.longitude);
+            const altitude = Number(location.altitude || 0);
+
+            if (!name || !Number.isFinite(latitude) || !Number.isFinite(longitude) || !Number.isFinite(altitude)) {
+                continue;
             }
+
+            const existingIndex = normalized.findIndex(item => item.name === name);
+            const normalizedLocation = { name, latitude, longitude, altitude };
+            if (existingIndex >= 0) {
+                normalized[existingIndex] = normalizedLocation;
+            } else {
+                normalized.push(normalizedLocation);
+            }
+        }
+
+        return normalized;
+    }
+
+    getCustomLocations() {
+        const savedLocations = localStorage.getItem('savedLocations');
+        if (!savedLocations) return [];
+
+        try {
+            return this.normalizeLocations(JSON.parse(savedLocations));
+        } catch (e) {
+            this.tracker.addLog('加载保存位置失败: ' + e.message);
+            return [];
+        }
+    }
+
+    getAllLocations() {
+        const mergedByName = new Map();
+        const customOnlyNames = [];
+
+        for (const location of this.normalizeLocations(this.defaultLocations)) {
+            mergedByName.set(location.name, location);
+        }
+
+        for (const location of this.getCustomLocations()) {
+            if (!mergedByName.has(location.name)) {
+                customOnlyNames.push(location.name);
+            }
+            mergedByName.set(location.name, location);
+        }
+
+        const orderedLocations = [];
+        for (const location of this.defaultLocations) {
+            const merged = mergedByName.get(location.name);
+            if (merged) orderedLocations.push(merged);
+        }
+        for (const name of customOnlyNames) {
+            orderedLocations.push(mergedByName.get(name));
+        }
+
+        return orderedLocations;
+    }
+
+    getLocationByName(name) {
+        return this.getAllLocations().find(location => location.name === name) || null;
+    }
+
+    getMatchingLocationName(locations = this.getAllLocations()) {
+        const latitude = Number(document.getElementById('latitude').value);
+        const longitude = Number(document.getElementById('longitude').value);
+        const altitude = Number(document.getElementById('altitude').value || 0);
+
+        const matched = locations.find(location =>
+            location.latitude === latitude &&
+            location.longitude === longitude &&
+            location.altitude === altitude
+        );
+
+        return matched ? matched.name : '';
+    }
+
+    applyLocation(location, saveConfig = true) {
+        document.getElementById('latitude').value = location.latitude;
+        document.getElementById('longitude').value = location.longitude;
+        document.getElementById('altitude').value = location.altitude || 0;
+
+        const locationSelect = document.getElementById('locationSelect');
+        if (locationSelect) {
+            locationSelect.value = location.name;
+        }
+
+        if (saveConfig) {
+            this.saveGroundStationConfig();
         }
     }
     
@@ -198,18 +302,11 @@ class LocationManager {
         }
         
         // 获取现有位置
-        let locations = [];
-        const savedLocations = localStorage.getItem('savedLocations');
-        if (savedLocations) {
-            try {
-                locations = JSON.parse(savedLocations);
-            } catch (e) {
-                this.tracker.addLog('解析保存位置失败: ' + e.message);
-            }
-        }
+        let locations = this.getCustomLocations();
+        const allLocations = this.getAllLocations();
         
         // 检查是否已存在同名位置
-        if (locations.some(loc => loc.name === name)) {
+        if (allLocations.some(loc => loc.name === name)) {
             if (!confirm(`位置 "${name}" 已存在，是否覆盖？`)) {
                 this.isSaving = false;
                 return;
@@ -229,10 +326,10 @@ class LocationManager {
         locations.push(newLocation);
         
         // 保存到localStorage
-        localStorage.setItem('savedLocations', JSON.stringify(locations));
+        localStorage.setItem('savedLocations', JSON.stringify(this.normalizeLocations(locations)));
         
         // 更新下拉菜单
-        this.updateLocationSelect(locations);
+        this.updateLocationSelect(this.getAllLocations());
         
         this.tracker.addLog(`已保存位置: ${name}`);
         
@@ -245,10 +342,10 @@ class LocationManager {
     
     // 清除所有位置
     clearAllLocations() {
-        if (confirm('确定要清除所有保存的位置吗？此操作不可撤销。')) {
+        if (confirm('确定要清除自定义位置并恢复内置位置吗？')) {
             localStorage.removeItem('savedLocations');
-            this.updateLocationSelect([]);
-            this.tracker.addLog('已清除所有保存的位置');
+            this.updateLocationSelect(this.getAllLocations());
+            this.tracker.addLog('已清除自定义位置，恢复内置位置');
         }
     }
     

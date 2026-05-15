@@ -34,7 +34,33 @@ class SatelliteTracker {
             'oneweb': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=oneweb&FORMAT=tle',
             'iridium': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=iridium&FORMAT=tle',
             'globalstar': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=globalstar&FORMAT=tle',
-            'x2': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
+            'x2': 'https://celestrak.org/NORAD/elements/gp.php?INTDES=2025-067&FORMAT=tle',
+            'x2-3': 'https://celestrak.org/NORAD/elements/gp.php?INTDES=2026-091&FORMAT=tle'
+        };
+
+        // X2 系列使用国际代号精确筛选，并按 sat 项目的规则处理显示名称
+        this.specialSatelliteConfig = {
+            'x2': {
+                targetIntdes: ['2025-067A', '2025-067B', '2025-067C', '2025-067D'],
+                targetNames: ['HJS-6A', 'HJS-6B', 'HJS-6C', 'HJS-6D'],
+                aliases: {
+                    '2025-067B': '04-YH',
+                    '2025-067C': '01-YH',
+                    '2025-067D': '02-CG'
+                },
+                preferIntdesName: false
+            },
+            'x2-3': {
+                targetIntdes: ['2026-091A', '2026-091B', '2026-091C', '2026-091D'],
+                targetNames: ['2026-091A', '2026-091B', '2026-091C', '2026-091D'],
+                aliases: {
+                    '2026-091A': '11-YH',
+                    '2026-091B': '18-GD',
+                    '2026-091C': '09-CG',
+                    '2026-091D': '10-BY'
+                },
+                preferIntdesName: true
+            }
         };
         
         this.initializeModules();

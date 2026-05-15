@@ -155,15 +155,16 @@ class EphemerisManager {
         // 流式处理TLE数据
         for (let i = 0; i < lines.length - 2; i += 3) {
             const name = lines[i].trim();
-            const line1 = lines[i + 1];
-            const line2 = lines[i + 2];
+            const line1 = lines[i + 1].trim();
+            const line2 = lines[i + 2].trim();
             
             if (name && line1 && line2 && line1.startsWith('1 ') && line2.startsWith('2 ')) {
                 const noradId = line1.substring(2, 7).trim();
+                const displayName = this.getSatelliteDisplayName(constellation, name, line1);
                 // 应用筛选条件
-                if (this.shouldIncludeSatellite(constellation, name, noradId)) {
+                if (this.shouldIncludeSatellite(constellation, name, noradId, line1, displayName)) {
                     satellites.push({
-                        name: name,
+                        name: displayName,
                         line1: line1,
                         line2: line2,
                         noradId: noradId
@@ -177,18 +178,62 @@ class EphemerisManager {
         this.tracker.addLog(`筛选完成，共 ${satellites.length} 颗卫星`);
     }
     
-    shouldIncludeSatellite(constellation, name, noradId) {
+    shouldIncludeSatellite(constellation, name, noradId, line1, displayName) {
         switch (constellation) {
             case 'starlink_dtc':
                 // 筛选DTC相关的星链卫星
                 return name.toLowerCase().includes('dtc') || name.toLowerCase().includes('direct');
             case 'x2':
-                // 只筛选指定的X2卫星编号
-                const x2Satellites = ['2025-067A', '2025-067B', '2025-067C', '2025-067D'];
-                return x2Satellites.some(id => name.includes(id));
+            case 'x2-3':
+                return this.shouldIncludeSpecialSatellite(constellation, name, line1, displayName);
             default:
                 return true; // 其他星座不筛选
         }
+    }
+
+    shouldIncludeSpecialSatellite(constellation, name, line1, displayName) {
+        const config = this.tracker.specialSatelliteConfig[constellation];
+        if (!config) return false;
+
+        const intdes = this.getInternationalDesignator(line1);
+        const aliases = Object.values(config.aliases || {});
+        return (
+            (intdes && config.targetIntdes.includes(intdes)) ||
+            config.targetNames.includes(name) ||
+            config.targetNames.includes(displayName) ||
+            aliases.includes(name) ||
+            aliases.includes(displayName)
+        );
+    }
+
+    getSatelliteDisplayName(constellation, sourceName, line1) {
+        const config = this.tracker.specialSatelliteConfig[constellation];
+        if (!config) return sourceName;
+
+        const intdes = this.getInternationalDesignator(line1);
+        if (!intdes) return sourceName;
+
+        if (config.aliases && config.aliases[intdes]) {
+            return config.aliases[intdes];
+        }
+
+        return config.preferIntdesName ? intdes : sourceName;
+    }
+
+    getInternationalDesignator(line1) {
+        const parts = line1.trim().split(/\s+/);
+        if (parts.length < 3) return '';
+        return this.formatInternationalDesignator(parts[2]);
+    }
+
+    formatInternationalDesignator(rawIntdes) {
+        const raw = rawIntdes.trim().toUpperCase();
+        const match = raw.match(/^(\d{2})(\d{3})([A-Z]{1,3})$/);
+        if (!match) return raw;
+
+        const year = Number(match[1]);
+        const fullYear = year < 57 ? 2000 + year : 1900 + year;
+        return `${fullYear}-${match[2]}${match[3]}`;
     }
     
     populateSatelliteDropdown() {
@@ -213,7 +258,7 @@ class EphemerisManager {
         let contentToSave;
         
         // 对于需要筛选的星座，只保存筛选后的卫星数据
-        if (constellation === 'starlink_dtc' || constellation === 'x2') {
+        if (constellation === 'starlink_dtc' || this.tracker.specialSatelliteConfig[constellation]) {
             contentToSave = this.tracker.satellites.map(sat => 
                 `${sat.name}\n${sat.line1}\n${sat.line2}`
             ).join('\n');
