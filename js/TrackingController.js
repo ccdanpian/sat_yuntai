@@ -404,7 +404,7 @@ class TrackingController {
             } catch (error) {
                 console.error('获取当前位置失败:', error);
             }
-        }, 1000);
+        }, this.tracker.positionDisplayIntervalMs || 1000);
     }
     
     predictSatelliteTrajectory(currentAzimuth) {
@@ -468,16 +468,22 @@ class TrackingController {
             this.tracker.elevationDataManager.addDataPoint(azimuth, elevation);
         }
         
-        // 更新云台指针
+        if (this.tracker.gimbal3DView) {
+            this.tracker.gimbal3DView.setAngles(azimuth, elevation);
+        }
+
+        // 更新旧版2D云台指针（WebGL不可用时兜底）
         const pointer = document.getElementById('gimbalPointer');
         
-        // 根据仰角计算指针长度：仰角越大，指针越短
-        const minLength = 20;
-        const maxLength = 80;
-        const pointerLength = maxLength - (elevation / 90) * (maxLength - minLength);
-        
-        pointer.style.height = `${pointerLength}px`;
-        pointer.style.transform = `translate(-50%, -100%) rotate(${azimuth}deg)`;
+        if (pointer) {
+            // 根据仰角计算指针长度：仰角越大，指针越短
+            const minLength = 20;
+            const maxLength = 80;
+            const pointerLength = maxLength - (elevation / 90) * (maxLength - minLength);
+
+            pointer.style.height = `${pointerLength}px`;
+            pointer.style.transform = `translate(-50%, -100%) rotate(${azimuth}deg)`;
+        }
         
         // 更新角度显示
         document.getElementById('azimuthDisplay').textContent = `${azimuth.toFixed(2)}°`;

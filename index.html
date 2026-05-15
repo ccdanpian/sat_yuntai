@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🛰️ 卫星跟踪云台控制系统</title>
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -118,8 +119,12 @@
             
             <div class="gimbal-display">
                 <h3>🎯 云台指向</h3>
-                <div class="gimbal-visual" style="margin-top: 15px;">
+                <div class="gimbal-visual" id="gimbal3DView" style="margin-top: 15px;">
                     <div class="gimbal-pointer" id="gimbalPointer"></div>
+                    <span class="gimbal-axis-label gimbal-axis-label-n">N</span>
+                    <span class="gimbal-axis-label gimbal-axis-label-e">E</span>
+                    <span class="gimbal-axis-label gimbal-axis-label-s">S</span>
+                    <span class="gimbal-axis-label gimbal-axis-label-w">W</span>
                 </div>
                 <div class="angle-display">
                     <div>方位角: <span id="azimuthDisplay">0°</span></div>
@@ -197,6 +202,8 @@
     
     <!-- 模块化JavaScript文件 -->
     <script src="js/EphemerisManager.js"></script>
+    <script src="js/vendor/three.min.js"></script>
+    <script src="js/Gimbal3DView.js"></script>
     <script src="js/TrackingController.js"></script>
     <script src="js/RadarDisplay.js"></script>
     <script src="js/UIManager.js"></script>

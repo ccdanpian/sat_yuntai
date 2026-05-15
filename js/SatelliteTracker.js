@@ -12,6 +12,7 @@ class SatelliteTracker {
         this.forceTimeStartTime = null;
         this.trackingInterval = null;
         this.positionUpdateInterval = null;
+        this.positionDisplayIntervalMs = 100;
         this.currentAzimuth = 0;
         this.currentElevation = 0;
         this.azimuthHistory = [];
@@ -91,6 +92,7 @@ class SatelliteTracker {
         this.ephemerisManager = new EphemerisManager(this);
         this.trackingController = new TrackingController(this);
         this.radarDisplay = new RadarDisplay(this);
+        this.gimbal3DView = typeof Gimbal3DView !== 'undefined' ? new Gimbal3DView(this) : null;
         this.uiManager = new UIManager(this);
         this.statusManager = new StatusManager(this);
         this.locationManager = new LocationManager(this, this.statusManager);

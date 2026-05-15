@@ -319,13 +319,15 @@ button:disabled {
 }
 
 .gimbal-visual {
-    width: 200px;
-    height: 200px;
+    width: min(100%, 280px);
+    height: 240px;
     margin: 0 auto;
     position: relative;
     border: 2px solid #4ecdc4;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(78, 205, 196, 0.1) 0%, rgba(78, 205, 196, 0.3) 100%);
+    border-radius: 8px;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 50% 45%, rgba(78, 205, 196, 0.24) 0%, rgba(6, 18, 28, 0.82) 56%, rgba(0, 0, 0, 0.9) 100%);
 }
 
 .gimbal-pointer {
@@ -338,6 +340,57 @@ button:disabled {
     transform-origin: bottom center;
     transform: translate(-50%, -100%) rotate(0deg);
     transition: transform 0.5s ease;
+}
+
+.gimbal-visual.is-3d .gimbal-pointer {
+    display: none;
+}
+
+.gimbal-3d-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+    touch-action: none;
+}
+
+.gimbal-3d-canvas:active {
+    cursor: grabbing;
+}
+
+.gimbal-axis-label {
+    position: absolute;
+    z-index: 2;
+    color: rgba(255, 255, 255, 0.82);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+}
+
+.gimbal-axis-label-n {
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.gimbal-axis-label-e {
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.gimbal-axis-label-s {
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.gimbal-axis-label-w {
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
 }
 
 .angle-display {
@@ -498,8 +551,8 @@ button:disabled {
     
     /* 云台显示区域优化 */
     .gimbal-visual {
-        width: 150px;
-        height: 150px;
+        width: min(100%, 240px);
+        height: 210px;
     }
     
     .gimbal-pointer {
@@ -582,8 +635,8 @@ button:disabled {
     }
     
     .gimbal-visual {
-        width: 120px;
-        height: 120px;
+        width: min(100%, 220px);
+        height: 190px;
     }
     
     .gimbal-pointer {
