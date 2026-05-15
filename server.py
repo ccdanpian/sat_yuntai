@@ -116,6 +116,10 @@ CONSTELLATION_LABELS = {
 }
 MIN_VISIBLE_ELEVATION = get_float_env('MIN_VISIBLE_ELEVATION', 5)
 MIN_PASS_MAX_ELEVATION = get_float_env('MIN_PASS_MAX_ELEVATION', 30)
+TRACKING_UPDATE_INTERVAL = max(0.1, get_float_env('TRACKING_UPDATE_INTERVAL', 0.25))
+GIMBAL_COMMAND_DEADBAND_DEGREES = max(0.0, get_float_env('GIMBAL_COMMAND_DEADBAND_DEGREES', 0.05))
+GIMBAL_TRACKING_SPEED = max(1, get_int_env('GIMBAL_TRACKING_SPEED', 10))
+GIMBAL_TRACKING_ACCELERATION = max(0, get_int_env('GIMBAL_TRACKING_ACCELERATION', 0))
 
 def require_api_token(func):
     """Protect hardware-changing API endpoints when SAT_YUNTAI_API_TOKEN is set."""
@@ -194,6 +198,7 @@ class SatelliteTracker:
         self.trajectory_points = []  # 存储轨迹点数据
         self.last_satellite_visible = False
         self.last_control_error = None
+        self.last_command_skipped_time = 0.0
         
         # 后端不再需要星座URL配置，由前端负责下载
         
@@ -382,15 +387,8 @@ class SatelliteTracker:
 
 
     
-    def control_gimbal(self, azimuth: float, elevation: float, current_time=None):
+    def control_gimbal(self, azimuth: float, elevation: float, current_time=None, force: bool = False):
         """控制云台指向"""
-        if self.simulation_mode and current_time:
-            beijing_tz = timezone(timedelta(hours=8))
-            beijing_time = current_time.astimezone(beijing_tz)
-            print(f"[DEBUG] 云台控制请求 - 强制时间: {beijing_time.strftime('%Y-%m-%d %H:%M:%S')} (北京时间) - 原始角度: 方位角={azimuth:.2f}°, 仰角={elevation:.2f}°")
-        else:
-            print(f"[DEBUG] 云台控制请求 - 原始角度: 方位角={azimuth:.2f}°, 仰角={elevation:.2f}°")
-        
         # 限制角度范围
         original_azimuth = azimuth
         original_elevation = elevation
@@ -400,13 +398,42 @@ class SatelliteTracker:
         if original_azimuth != azimuth or original_elevation != elevation:
             print(f"[DEBUG] 角度限制调整 - 调整后: 方位角={azimuth:.2f}°, 仰角={elevation:.2f}°")
 
+        azimuth_delta = abs(azimuth - self.current_azimuth)
+        elevation_delta = abs(elevation - self.current_elevation)
+        if (
+            not force and
+            GIMBAL_COMMAND_DEADBAND_DEGREES > 0 and
+            azimuth_delta < GIMBAL_COMMAND_DEADBAND_DEGREES and
+            elevation_delta < GIMBAL_COMMAND_DEADBAND_DEGREES
+        ):
+            now = time.time()
+            if now - self.last_command_skipped_time >= 5:
+                print(
+                    f"[DEBUG] 角度变化小于死区 {GIMBAL_COMMAND_DEADBAND_DEGREES:.3f}°，跳过本次云台指令 "
+                    f"(Δ方位={azimuth_delta:.3f}°, Δ仰角={elevation_delta:.3f}°)"
+                )
+                self.last_command_skipped_time = now
+            return False
+
+        if self.simulation_mode and current_time:
+            beijing_tz = timezone(timedelta(hours=8))
+            beijing_time = current_time.astimezone(beijing_tz)
+            print(f"[DEBUG] 云台控制请求 - 强制时间: {beijing_time.strftime('%Y-%m-%d %H:%M:%S')} (北京时间) - 目标角度: 方位角={azimuth:.2f}°, 仰角={elevation:.2f}°")
+        else:
+            print(f"[DEBUG] 云台控制请求 - 目标角度: 方位角={azimuth:.2f}°, 仰角={elevation:.2f}°")
+
         command_accepted = False
         if self.gimbal_controller:
             try:
                 print(f"[DEBUG] 发送云台控制指令到硬件设备")
                 # 使用base_ctrl.py提供的gimbal_ctrl方法
                 # 参数: x(方位角), y(仰角), speed(速度), acceleration(加速度)
-                self.gimbal_controller.gimbal_ctrl(azimuth, elevation, 10, 0)
+                self.gimbal_controller.gimbal_ctrl(
+                    azimuth,
+                    elevation,
+                    GIMBAL_TRACKING_SPEED,
+                    GIMBAL_TRACKING_ACCELERATION
+                )
                 self.last_control_error = None
                 command_accepted = True
                 print(f"[INFO] 云台控制指令发送成功: 方位角={azimuth:.2f}°, 仰角={elevation:.2f}°")
@@ -424,13 +451,14 @@ class SatelliteTracker:
             self.current_azimuth = azimuth
             self.current_elevation = elevation
             print(f"[DEBUG] 当前云台位置已更新: 方位角={azimuth:.2f}°, 仰角={elevation:.2f}°")
+        return command_accepted
 
     def park_gimbal_if_needed(self, current_time=None, loop_count: int = 0):
         """卫星不可见时只发送一次归零指令，避免重复刷串口。"""
         already_parked = abs(self.current_azimuth) < 0.01 and abs(self.current_elevation) < 0.01
         if self.last_satellite_visible or not already_parked:
             print(f"[INFO] 卫星不可见，云台归零")
-            self.control_gimbal(0, 0, current_time)
+            self.control_gimbal(0, 0, current_time, force=True)
         elif loop_count % 30 == 1:
             print(f"[INFO] 卫星不可见，云台保持零位")
 
@@ -440,15 +468,18 @@ class SatelliteTracker:
         """跟踪循环"""
         print(f"[INFO] 开始卫星跟踪循环")
         loop_count = 0
+        loop_start_monotonic = time.monotonic()
         
         while self.is_tracking:
+            cycle_start_monotonic = time.monotonic()
             try:
                 loop_count += 1
                 
                 # 根据模式选择时间
                 if self.simulation_mode:
                     if self.simulation_start_time is not None:
-                        current_time = self.simulation_start_time + timedelta(seconds=loop_count)
+                        elapsed_seconds = cycle_start_monotonic - loop_start_monotonic
+                        current_time = self.simulation_start_time + timedelta(seconds=elapsed_seconds)
                         if current_time.tzinfo is None:
                             current_time = current_time.replace(tzinfo=timezone.utc)
                         self.current_simulation_time = current_time
@@ -529,13 +560,14 @@ class SatelliteTracker:
                     else:
                         self.park_gimbal_if_needed(current_time, loop_count)
                 
-                # 等待1秒
-                time.sleep(1)
+                elapsed = time.monotonic() - cycle_start_monotonic
+                time.sleep(max(0.0, TRACKING_UPDATE_INTERVAL - elapsed))
                 
             except Exception as e:
                 print(f"[ERROR] 跟踪循环错误: {e}")
                 print(f"[ERROR] 循环次数: {loop_count}, 时间: {datetime.now(timezone.utc)}")
-                time.sleep(1)
+                elapsed = time.monotonic() - cycle_start_monotonic
+                time.sleep(max(0.0, TRACKING_UPDATE_INTERVAL - elapsed))
         
         print(f"[INFO] 卫星跟踪循环结束 - 总循环次数: {loop_count}")
     
@@ -571,6 +603,7 @@ class SatelliteTracker:
         self.trajectory_points = trajectory_points or []  # 保存轨迹点数据
         self.last_satellite_visible = False
         self.last_control_error = None
+        self.last_command_skipped_time = 0.0
         print(f"[DEBUG] 云台朝向设置: {gimbal_direction}")
         
         if simulation_mode and start_time:
@@ -616,7 +649,7 @@ class SatelliteTracker:
         # 云台复位
         print(f"[INFO] 云台复位中...")
         try:
-            self.control_gimbal(0, 0)
+            self.control_gimbal(0, 0, force=True)
             self.last_satellite_visible = False
             print(f"[INFO] 云台已复位到零位")
         except Exception as e:
