@@ -116,9 +116,9 @@ CONSTELLATION_LABELS = {
 }
 MIN_VISIBLE_ELEVATION = get_float_env('MIN_VISIBLE_ELEVATION', 5)
 MIN_PASS_MAX_ELEVATION = get_float_env('MIN_PASS_MAX_ELEVATION', 30)
-TRACKING_UPDATE_INTERVAL = max(0.02, get_float_env('TRACKING_UPDATE_INTERVAL', 0.05))
-GIMBAL_COMMAND_DEADBAND_DEGREES = max(0.0, get_float_env('GIMBAL_COMMAND_DEADBAND_DEGREES', 0.02))
-GIMBAL_MIN_COMMAND_INTERVAL = max(0.0, get_float_env('GIMBAL_MIN_COMMAND_INTERVAL', 0.05))
+TRACKING_UPDATE_INTERVAL = max(0.01, get_float_env('TRACKING_UPDATE_INTERVAL', 0.02))
+GIMBAL_COMMAND_DEADBAND_DEGREES = max(0.0, get_float_env('GIMBAL_COMMAND_DEADBAND_DEGREES', 0.005))
+GIMBAL_MIN_COMMAND_INTERVAL = max(0.0, get_float_env('GIMBAL_MIN_COMMAND_INTERVAL', 0.02))
 GIMBAL_FORCE_COMMAND_DEGREES = max(
     GIMBAL_COMMAND_DEADBAND_DEGREES,
     get_float_env('GIMBAL_FORCE_COMMAND_DEGREES', 0.2)
@@ -128,6 +128,7 @@ GIMBAL_MAX_TARGET_LAG_DEGREES = max(
     GIMBAL_COMMAND_DEADBAND_DEGREES,
     get_float_env('GIMBAL_MAX_TARGET_LAG_DEGREES', 0.2)
 )
+GIMBAL_MAX_TARGET_LAG_SECONDS = max(0.0, get_float_env('GIMBAL_MAX_TARGET_LAG_SECONDS', 0.3))
 GIMBAL_TRACKING_SPEED = max(1, get_int_env('GIMBAL_TRACKING_SPEED', 10))
 GIMBAL_TRACKING_ACCELERATION = max(0, get_int_env('GIMBAL_TRACKING_ACCELERATION', 20))
 
@@ -210,6 +211,9 @@ class SatelliteTracker:
         self.last_control_error = None
         self.last_command_skipped_time = 0.0
         self.last_gimbal_command_time = 0.0
+        self.last_target_azimuth = None
+        self.last_target_elevation = None
+        self.last_target_monotonic = 0.0
         
         # 后端不再需要星座URL配置，由前端负责下载
         
@@ -396,6 +400,46 @@ class SatelliteTracker:
             parsed_time = parsed_time.replace(tzinfo=beijing_tz)
         return parsed_time.astimezone(timezone.utc)
 
+    @staticmethod
+    def shortest_azimuth_delta(current_azimuth: float, target_azimuth: float) -> float:
+        """Return the shortest signed pan-axis delta in degrees."""
+        delta = (target_azimuth - current_azimuth + 180) % 360 - 180
+        if math.isclose(delta, -180.0) and target_azimuth - current_azimuth > 0:
+            return 180.0
+        return delta
+
+    @classmethod
+    def nearest_equivalent_azimuth(cls, current_azimuth: float, target_azimuth: float) -> float:
+        """Map ±180° equivalent headings to the side nearest the current pan angle."""
+        nearest = current_azimuth + cls.shortest_azimuth_delta(current_azimuth, target_azimuth)
+        if nearest > 180:
+            nearest -= 360
+        elif nearest < -180:
+            nearest += 360
+        return max(-180, min(180, nearest))
+
+    def estimate_target_axis_speed(
+        self,
+        target_azimuth: float,
+        target_elevation: float,
+        now_monotonic: float
+    ) -> float:
+        """Estimate target angular speed from successive computed target positions."""
+        if self.last_target_azimuth is None or self.last_target_elevation is None:
+            return 0.0
+
+        elapsed = now_monotonic - self.last_target_monotonic
+        if elapsed <= 0:
+            return 0.0
+
+        azimuth_speed = abs(self.shortest_azimuth_delta(self.last_target_azimuth, target_azimuth)) / elapsed
+        elevation_speed = abs(target_elevation - self.last_target_elevation) / elapsed
+        return max(azimuth_speed, elevation_speed)
+
+    def record_tracking_target(self, target_azimuth: float, target_elevation: float, now_monotonic: float):
+        self.last_target_azimuth = target_azimuth
+        self.last_target_elevation = target_elevation
+        self.last_target_monotonic = now_monotonic
 
     
     def control_gimbal(self, azimuth: float, elevation: float, current_time=None, force: bool = False):
@@ -409,13 +453,22 @@ class SatelliteTracker:
         if original_azimuth != azimuth or original_elevation != elevation:
             print(f"[DEBUG] 角度限制调整 - 调整后: 方位角={azimuth:.2f}°, 仰角={elevation:.2f}°")
 
-        target_azimuth = azimuth
+        target_azimuth = self.nearest_equivalent_azimuth(self.current_azimuth, azimuth)
         target_elevation = elevation
-        azimuth_delta_signed = target_azimuth - self.current_azimuth
+        azimuth_delta_signed = self.shortest_azimuth_delta(self.current_azimuth, target_azimuth)
         elevation_delta_signed = target_elevation - self.current_elevation
         azimuth_delta = abs(azimuth_delta_signed)
         elevation_delta = abs(elevation_delta_signed)
         max_delta = max(azimuth_delta, elevation_delta)
+
+        now_monotonic = time.monotonic()
+        target_axis_speed = 0.0 if force else self.estimate_target_axis_speed(
+            target_azimuth,
+            target_elevation,
+            now_monotonic
+        )
+        self.record_tracking_target(target_azimuth, target_elevation, now_monotonic)
+
         if (
             not force and
             GIMBAL_COMMAND_DEADBAND_DEGREES > 0 and
@@ -431,7 +484,6 @@ class SatelliteTracker:
                 self.last_command_skipped_time = now
             return False
 
-        now_monotonic = time.monotonic()
         command_interval = now_monotonic - self.last_gimbal_command_time
         if (
             not force and
@@ -456,21 +508,28 @@ class SatelliteTracker:
         smoothing_alpha = 1.0
         if not force and GIMBAL_COMMAND_SMOOTHING_STEPS > 1:
             smoothing_alpha = 1.0 / GIMBAL_COMMAND_SMOOTHING_STEPS
-            if GIMBAL_MAX_TARGET_LAG_DEGREES > 0 and max_delta > GIMBAL_MAX_TARGET_LAG_DEGREES:
-                smoothing_alpha = max(smoothing_alpha, 1.0 - (GIMBAL_MAX_TARGET_LAG_DEGREES / max_delta))
+            allowed_target_lag = GIMBAL_MAX_TARGET_LAG_DEGREES
+            if GIMBAL_MAX_TARGET_LAG_SECONDS > 0 and target_axis_speed > 0:
+                allowed_target_lag = max(
+                    allowed_target_lag,
+                    target_axis_speed * GIMBAL_MAX_TARGET_LAG_SECONDS
+                )
+            if allowed_target_lag > 0 and max_delta > allowed_target_lag:
+                smoothing_alpha = max(smoothing_alpha, 1.0 - (allowed_target_lag / max_delta))
 
             command_azimuth = self.current_azimuth + azimuth_delta_signed * smoothing_alpha
             command_elevation = self.current_elevation + elevation_delta_signed * smoothing_alpha
-            command_azimuth = max(-180, min(180, command_azimuth))
+            command_azimuth = self.nearest_equivalent_azimuth(self.current_azimuth, command_azimuth)
             command_elevation = max(-30, min(90, command_elevation))
 
             if smoothing_alpha < 1.0:
-                remaining_azimuth_error = target_azimuth - command_azimuth
+                remaining_azimuth_error = self.shortest_azimuth_delta(command_azimuth, target_azimuth)
                 remaining_elevation_error = target_elevation - command_elevation
                 print(
                     f"[DEBUG] 平滑插补下发 - 目标: 方位角={target_azimuth:.2f}°, 仰角={target_elevation:.2f}°; "
                     f"下发: 方位角={command_azimuth:.2f}°, 仰角={command_elevation:.2f}°; "
-                    f"剩余误差: Δ方位={remaining_azimuth_error:.3f}°, Δ仰角={remaining_elevation_error:.3f}°"
+                    f"剩余误差: Δ方位={remaining_azimuth_error:.3f}°, Δ仰角={remaining_elevation_error:.3f}°; "
+                    f"目标速度≈{target_axis_speed:.3f}°/s"
                 )
 
         if self.simulation_mode and current_time:
@@ -664,6 +723,9 @@ class SatelliteTracker:
         self.last_control_error = None
         self.last_command_skipped_time = 0.0
         self.last_gimbal_command_time = 0.0
+        self.last_target_azimuth = None
+        self.last_target_elevation = None
+        self.last_target_monotonic = 0.0
         print(f"[DEBUG] 云台朝向设置: {gimbal_direction}")
         
         if simulation_mode and start_time:
