@@ -19,6 +19,8 @@ class Gimbal3DView {
         this.cameraDistance = 4.4;
         this.dragState = null;
         this.resizeObserver = null;
+        this.directionLabelRadius = 2.06;
+        this.directionLabels = [];
 
         this.initialize();
     }
@@ -45,6 +47,7 @@ class Gimbal3DView {
             this.container.classList.add('is-3d');
             this.container.querySelectorAll('canvas').forEach(canvas => canvas.remove());
             this.container.appendChild(this.renderer.domElement);
+            this.initializeDirectionLabels();
 
             this.createSceneObjects();
             this.bindInteraction();
@@ -160,6 +163,23 @@ class Gimbal3DView {
         this.updateArm(0, 0);
     }
 
+    initializeDirectionLabels() {
+        const radius = this.directionLabelRadius;
+        const definitions = [
+            { selector: '.gimbal-axis-label-n', position: new THREE.Vector3(0, 0.05, -radius) },
+            { selector: '.gimbal-axis-label-e', position: new THREE.Vector3(radius, 0.05, 0) },
+            { selector: '.gimbal-axis-label-s', position: new THREE.Vector3(0, 0.05, radius) },
+            { selector: '.gimbal-axis-label-w', position: new THREE.Vector3(-radius, 0.05, 0) }
+        ];
+
+        this.directionLabels = definitions
+            .map(definition => ({
+                element: this.container.querySelector(definition.selector),
+                position: definition.position
+            }))
+            .filter(label => label.element);
+    }
+
     circlePoints(radius, segments) {
         const points = [];
         for (let i = 0; i < segments; i += 1) {
@@ -234,6 +254,7 @@ class Gimbal3DView {
             Math.cos(az) * radius
         );
         this.camera.lookAt(0, 0.45, 0);
+        this.updateDirectionLabels();
     }
 
     animate() {
@@ -242,6 +263,7 @@ class Gimbal3DView {
         this.displayAzimuth = this.interpolateAngle(this.displayAzimuth, this.targetAzimuth, 0.16);
         this.displayElevation += (this.targetElevation - this.displayElevation) * 0.16;
         this.updateArm(this.displayAzimuth, this.displayElevation);
+        this.updateDirectionLabels();
 
         this.renderer.render(this.scene, this.camera);
         this.animationFrame = requestAnimationFrame(() => this.animate());
@@ -289,5 +311,24 @@ class Gimbal3DView {
         mesh.scale.set(1, length, 1);
         mesh.position.copy(midpoint);
         mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+    }
+
+    updateDirectionLabels() {
+        if (!this.renderer || !this.camera || this.directionLabels.length === 0) return;
+
+        const width = this.renderer.domElement.clientWidth;
+        const height = this.renderer.domElement.clientHeight;
+        const padding = 12;
+
+        this.directionLabels.forEach(label => {
+            const projected = label.position.clone().project(this.camera);
+            const x = (projected.x * 0.5 + 0.5) * width;
+            const y = (-projected.y * 0.5 + 0.5) * height;
+            const isVisible = projected.z >= -1 && projected.z <= 1;
+
+            label.element.style.left = `${Math.max(padding, Math.min(width - padding, x))}px`;
+            label.element.style.top = `${Math.max(padding, Math.min(height - padding, y))}px`;
+            label.element.style.opacity = isVisible ? '0.9' : '0.25';
+        });
     }
 }

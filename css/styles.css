@@ -365,8 +365,18 @@ button:disabled {
     font-size: 11px;
     font-weight: 700;
     line-height: 1;
+    min-width: 18px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.42);
     pointer-events: none;
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+}
+
+.gimbal-visual.is-3d .gimbal-axis-label {
+    right: auto;
+    bottom: auto;
+    transform: translate(-50%, -50%);
 }
 
 .gimbal-axis-label-n {
