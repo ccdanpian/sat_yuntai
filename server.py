@@ -116,6 +116,7 @@ CONSTELLATION_LABELS = {
 }
 MIN_VISIBLE_ELEVATION = get_float_env('MIN_VISIBLE_ELEVATION', 5)
 MIN_PASS_MAX_ELEVATION = get_float_env('MIN_PASS_MAX_ELEVATION', 30)
+TRACKING_STOP_ELEVATION = get_float_env('TRACKING_STOP_ELEVATION', 20)
 TRACKING_UPDATE_INTERVAL = max(0.01, get_float_env('TRACKING_UPDATE_INTERVAL', 0.02))
 GIMBAL_COMMAND_DEADBAND_DEGREES = max(0.0, get_float_env('GIMBAL_COMMAND_DEADBAND_DEGREES', 0.05))
 GIMBAL_TRACKING_SPEED = max(1, get_int_env('GIMBAL_TRACKING_SPEED', 10))
@@ -199,6 +200,8 @@ class SatelliteTracker:
         self.last_satellite_visible = False
         self.last_control_error = None
         self.last_command_skipped_time = 0.0
+        self.tracking_stop_reason = None
+        self.tracking_stop_elevation = None
         
         # 后端不再需要星座URL配置，由前端负责下载
         
@@ -463,6 +466,22 @@ class SatelliteTracker:
             print(f"[INFO] 卫星不可见，云台保持零位")
 
         self.last_satellite_visible = False
+
+    def stop_tracking_for_low_elevation(self, elevation: float, current_time=None) -> bool:
+        """Stop tracking and park the gimbal when the satellite falls below the stop threshold."""
+        if elevation >= TRACKING_STOP_ELEVATION:
+            return False
+
+        print(
+            f"[INFO] 仰角 {elevation:.2f}° 低于停止阈值 "
+            f"{TRACKING_STOP_ELEVATION:.2f}°，停止跟踪并复位云台"
+        )
+        self.tracking_stop_reason = 'low_elevation'
+        self.tracking_stop_elevation = elevation
+        self.is_tracking = False
+        self.last_satellite_visible = False
+        self.control_gimbal(0, 0, current_time, force=True)
+        return True
     
     def tracking_loop(self):
         """跟踪循环"""
@@ -502,6 +521,9 @@ class SatelliteTracker:
                         convert_azimuth=False  # 先获取原始方位角
                     )
                     
+                    if self.stop_tracking_for_low_elevation(elevation, current_time):
+                        break
+
                     # 检查卫星是否可见
                     is_visible = elevation > MIN_VISIBLE_ELEVATION
                     
@@ -529,6 +551,7 @@ class SatelliteTracker:
                     print(f"[ERROR] 实时位置计算失败: {calc_error}")
                     # 如果实时计算失败，尝试使用轨迹点作为备选方案
                     is_visible = False
+                    matched_trajectory_point = False
                     current_azimuth = 0
                     current_elevation = 0
                     
@@ -537,12 +560,16 @@ class SatelliteTracker:
                         point_time = datetime.fromisoformat(point['time'].replace('Z', '+00:00'))
                         # 将匹配窗口从10秒改为1秒，确保每秒都能匹配到正确的轨迹点
                         if point_time <= current_time <= point_time + timedelta(seconds=1):
+                            matched_trajectory_point = True
                             is_visible = point['visible']
+                            current_elevation = point['elevation']
                             if is_visible:
                                 current_azimuth = point['azimuth']
-                                current_elevation = point['elevation']
                             break
                     
+                    if matched_trajectory_point and self.stop_tracking_for_low_elevation(current_elevation, current_time):
+                        break
+
                     if is_visible:
                         print(f"[INFO] 使用轨迹点数据 - 方位角: {current_azimuth:.2f}°, 仰角: {current_elevation:.2f}°")
                         
@@ -604,6 +631,8 @@ class SatelliteTracker:
         self.last_satellite_visible = False
         self.last_control_error = None
         self.last_command_skipped_time = 0.0
+        self.tracking_stop_reason = None
+        self.tracking_stop_elevation = None
         print(f"[DEBUG] 云台朝向设置: {gimbal_direction}")
         
         if simulation_mode and start_time:
@@ -671,7 +700,10 @@ class SatelliteTracker:
         result = {
             'azimuth': self.current_azimuth,
             'elevation': self.current_elevation,
-            'is_tracking': self.is_tracking
+            'is_tracking': self.is_tracking,
+            'stop_reason': self.tracking_stop_reason,
+            'stop_elevation': self.tracking_stop_elevation,
+            'stop_elevation_threshold': TRACKING_STOP_ELEVATION
         }
         
         # 在强制时间模式下添加当前时间

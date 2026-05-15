@@ -389,6 +389,11 @@ class TrackingController {
                 if (response.ok) {
                     const data = await response.json();
                     this.updateGimbalDisplay(data.azimuth, data.elevation);
+
+                    if (!data.is_tracking && this.tracker.isTracking) {
+                        this.handleBackendTrackingStopped(data);
+                        return;
+                    }
                     
                     // 预测轨迹方向
                     const trajectoryDirection = this.predictSatelliteTrajectory(data.azimuth);
@@ -405,6 +410,40 @@ class TrackingController {
                 console.error('获取当前位置失败:', error);
             }
         }, this.tracker.positionDisplayIntervalMs || 1000);
+    }
+
+    handleBackendTrackingStopped(data) {
+        this.tracker.isTracking = false;
+
+        if (this.tracker.trackingInterval) {
+            clearInterval(this.tracker.trackingInterval);
+            this.tracker.trackingInterval = null;
+        }
+
+        this.clearGimbalDirectionHint();
+
+        document.getElementById('controlBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+
+        let message = '跟踪已停止，云台已复位';
+        if (data.stop_reason === 'low_elevation') {
+            const elevation = Number(data.stop_elevation);
+            const threshold = Number(data.stop_elevation_threshold);
+            const elevationText = Number.isFinite(elevation) ? elevation.toFixed(2) : '--';
+            const thresholdText = Number.isFinite(threshold) ? threshold.toFixed(1) : '20.0';
+            message = `仰角 ${elevationText}° 低于 ${thresholdText}°，已停止跟踪并复位云台`;
+        }
+
+        this.tracker.updateStatus(message);
+        this.tracker.statusManager.updateStatusDisplay('trackingStatus', '⏹️ 跟踪已停止', 'warning');
+        this.tracker.statusManager.updateStatusDisplay('trajectoryStatus', '⏳ 等待搜索轨迹', '');
+        this.tracker.statusManager.updateStatusDisplay('calculationStatus', '⏳ 等待计算云台朝向', '');
+        this.tracker.addLog(message, 'warning');
+
+        if (this.tracker.elevationDataManager) {
+            this.tracker.elevationDataManager.stopCollecting();
+            this.tracker.elevationDataManager.updateDownloadButtonState();
+        }
     }
     
     predictSatelliteTrajectory(currentAzimuth) {
