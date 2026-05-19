@@ -202,6 +202,7 @@ class SatelliteTracker:
         self.last_command_skipped_time = 0.0
         self.tracking_stop_reason = None
         self.tracking_stop_elevation = None
+        self.tracking_stop_armed = False
         
         # 后端不再需要星座URL配置，由前端负责下载
         
@@ -468,8 +469,17 @@ class SatelliteTracker:
         self.last_satellite_visible = False
 
     def stop_tracking_for_low_elevation(self, elevation: float, current_time=None) -> bool:
-        """Stop tracking and park the gimbal when the satellite falls below the stop threshold."""
+        """Stop tracking only after the pass has climbed above the stop threshold."""
         if elevation >= TRACKING_STOP_ELEVATION:
+            if not self.tracking_stop_armed:
+                print(
+                    f"[INFO] 仰角已达到 {elevation:.2f}°，启用低于 "
+                    f"{TRACKING_STOP_ELEVATION:.2f}° 自动停止保护"
+                )
+            self.tracking_stop_armed = True
+            return False
+
+        if not self.tracking_stop_armed:
             return False
 
         print(
@@ -633,6 +643,7 @@ class SatelliteTracker:
         self.last_command_skipped_time = 0.0
         self.tracking_stop_reason = None
         self.tracking_stop_elevation = None
+        self.tracking_stop_armed = False
         print(f"[DEBUG] 云台朝向设置: {gimbal_direction}")
         
         if simulation_mode and start_time:
@@ -703,7 +714,8 @@ class SatelliteTracker:
             'is_tracking': self.is_tracking,
             'stop_reason': self.tracking_stop_reason,
             'stop_elevation': self.tracking_stop_elevation,
-            'stop_elevation_threshold': TRACKING_STOP_ELEVATION
+            'stop_elevation_threshold': TRACKING_STOP_ELEVATION,
+            'stop_elevation_armed': self.tracking_stop_armed
         }
         
         # 在强制时间模式下添加当前时间
