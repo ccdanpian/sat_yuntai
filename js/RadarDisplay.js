@@ -179,7 +179,7 @@ class RadarDisplay {
     }
     
     // 绘制卫星当前位置
-    drawSatellitePosition(azimuth, elevation) {
+    drawSatellitePosition(azimuth, elevation, displayAzimuthOverride = null) {
         const radarCanvas = document.getElementById('radarCanvas');
         if (!radarCanvas || elevation <= 0) return;
         
@@ -192,17 +192,19 @@ class RadarDisplay {
         const gimbalDirection = document.getElementById('gimbalDirection').value;
         
         // 对于雷达图显示，需要将后端转换后的方位角转换回原始方位角
-        let displayAzimuth = azimuth;
-        if (gimbalDirection === 'south') {
-            // 朝南模式：后端进行了 azimuth - 180 的转换，这里需要逆转换
-            displayAzimuth = azimuth + 180;
-            if (displayAzimuth >= 360) {
-                displayAzimuth -= 360;
-            }
-        } else if (gimbalDirection === 'north' || gimbalDirection === 'auto') {
-            // 朝北模式或自动模式：后端可能进行了 -360 的调整，但原始角度范围保持0-360
-            if (azimuth < 0) {
-                displayAzimuth = azimuth + 360;
+        let displayAzimuth = Number.isFinite(displayAzimuthOverride) ? displayAzimuthOverride : azimuth;
+        if (!Number.isFinite(displayAzimuthOverride)) {
+            if (gimbalDirection === 'south') {
+                // 朝南模式：后端进行了 azimuth - 180 的转换，这里需要逆转换
+                displayAzimuth = azimuth + 180;
+                if (displayAzimuth >= 360) {
+                    displayAzimuth -= 360;
+                }
+            } else if (gimbalDirection === 'north' || gimbalDirection === 'auto') {
+                // 朝北模式或自动模式：后端可能进行了 -360 的调整，但原始角度范围保持0-360
+                if (azimuth < 0) {
+                    displayAzimuth = azimuth + 360;
+                }
             }
         }
         

@@ -388,7 +388,7 @@ class TrackingController {
                 const response = await this.tracker.apiFetch('/api/get_current_position');
                 if (response.ok) {
                     const data = await response.json();
-                    this.updateGimbalDisplay(data.azimuth, data.elevation);
+                    this.updateGimbalDisplay(data.azimuth, data.elevation, data.display_azimuth);
 
                     if (!data.is_tracking && this.tracker.isTracking) {
                         this.handleBackendTrackingStopped(data);
@@ -498,9 +498,10 @@ class TrackingController {
         }
     }
     
-    updateGimbalDisplay(azimuth, elevation) {
+    updateGimbalDisplay(azimuth, elevation, displayAzimuth = null) {
         this.tracker.currentAzimuth = azimuth;
         this.tracker.currentElevation = elevation;
+        const absoluteAzimuth = Number.isFinite(displayAzimuth) ? displayAzimuth : this.getDisplayAzimuth(azimuth);
         
         // 收集仰角数据（如果正在跟踪）
         if (this.tracker.isTracking && this.tracker.elevationDataManager) {
@@ -508,7 +509,7 @@ class TrackingController {
         }
         
         if (this.tracker.gimbal3DView) {
-            this.tracker.gimbal3DView.setAngles(azimuth, elevation);
+            this.tracker.gimbal3DView.setAngles(absoluteAzimuth, elevation);
         }
 
         // 更新旧版2D云台指针（WebGL不可用时兜底）
@@ -537,7 +538,23 @@ class TrackingController {
         }
         
         // 绘制卫星当前位置
-        this.tracker.radarDisplay.drawSatellitePosition(azimuth, elevation);
+        this.tracker.radarDisplay.drawSatellitePosition(azimuth, elevation, absoluteAzimuth);
+    }
+
+    getDisplayAzimuth(azimuth) {
+        const gimbalDirection = document.getElementById('gimbalDirection').value;
+        let displayAzimuth = azimuth;
+
+        if (gimbalDirection === 'south') {
+            displayAzimuth = azimuth + 180;
+            if (displayAzimuth >= 360) {
+                displayAzimuth -= 360;
+            }
+        } else if (azimuth < 0) {
+            displayAzimuth = azimuth + 360;
+        }
+
+        return displayAzimuth;
     }
     
     // 分析轨迹方向和云台朝向建议

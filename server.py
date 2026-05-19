@@ -194,7 +194,9 @@ class SatelliteTracker:
         self.simulation_start_time = None
         self.tracking_thread = None
         self.current_azimuth = 0.0
+        self.current_display_azimuth = 0.0
         self.current_elevation = 0.0
+        self.gimbal_direction = "auto"
         self.gimbal_controller = None
         self.trajectory_points = []  # 存储轨迹点数据
         self.last_satellite_visible = False
@@ -391,7 +393,24 @@ class SatelliteTracker:
 
 
     
-    def control_gimbal(self, azimuth: float, elevation: float, current_time=None, force: bool = False):
+    def normalize_display_azimuth(self, azimuth: float) -> float:
+        """Normalize a compass azimuth to 0-360 degrees for display."""
+        return float(azimuth) % 360
+
+    def display_azimuth_from_gimbal_command(self, azimuth: float) -> float:
+        """Convert the local gimbal command angle back to an absolute compass azimuth."""
+        if self.gimbal_direction == "south":
+            return self.normalize_display_azimuth(azimuth + 180)
+        return self.normalize_display_azimuth(azimuth)
+
+    def control_gimbal(
+        self,
+        azimuth: float,
+        elevation: float,
+        current_time=None,
+        force: bool = False,
+        display_azimuth: Optional[float] = None
+    ):
         """控制云台指向"""
         # 限制角度范围
         original_azimuth = azimuth
@@ -453,6 +472,9 @@ class SatelliteTracker:
         # 只有命令被接受后才更新后端显示位置；真实位置仍应以硬件反馈为准。
         if command_accepted:
             self.current_azimuth = azimuth
+            if display_azimuth is None:
+                display_azimuth = self.display_azimuth_from_gimbal_command(azimuth)
+            self.current_display_azimuth = self.normalize_display_azimuth(display_azimuth)
             self.current_elevation = elevation
             print(f"[DEBUG] 当前云台位置已更新: 方位角={azimuth:.2f}°, 仰角={elevation:.2f}°")
         return command_accepted
@@ -530,6 +552,7 @@ class SatelliteTracker:
                         current_time, 
                         convert_azimuth=False  # 先获取原始方位角
                     )
+                    display_azimuth = azimuth
                     
                     if self.stop_tracking_for_low_elevation(elevation, current_time):
                         break
@@ -552,7 +575,7 @@ class SatelliteTracker:
                                 azimuth += 360
                         
                         # 控制云台跟踪卫星
-                        self.control_gimbal(azimuth, elevation, current_time)
+                        self.control_gimbal(azimuth, elevation, current_time, display_azimuth=display_azimuth)
                         self.last_satellite_visible = True
                     else:
                         self.park_gimbal_if_needed(current_time, loop_count)
@@ -563,6 +586,7 @@ class SatelliteTracker:
                     is_visible = False
                     matched_trajectory_point = False
                     current_azimuth = 0
+                    current_display_azimuth = 0
                     current_elevation = 0
                     
                     # 在轨迹点中查找当前时间对应的位置
@@ -575,6 +599,7 @@ class SatelliteTracker:
                             current_elevation = point['elevation']
                             if is_visible:
                                 current_azimuth = point['azimuth']
+                                current_display_azimuth = point['azimuth']
                             break
                     
                     if matched_trajectory_point and self.stop_tracking_for_low_elevation(current_elevation, current_time):
@@ -592,7 +617,12 @@ class SatelliteTracker:
                             if current_azimuth < -180:
                                 current_azimuth += 360
                         
-                        self.control_gimbal(current_azimuth, current_elevation, current_time)
+                        self.control_gimbal(
+                            current_azimuth,
+                            current_elevation,
+                            current_time,
+                            display_azimuth=current_display_azimuth
+                        )
                         self.last_satellite_visible = True
                     else:
                         self.park_gimbal_if_needed(current_time, loop_count)
@@ -638,6 +668,7 @@ class SatelliteTracker:
         self.simulation_mode = simulation_mode
         self.gimbal_direction = gimbal_direction
         self.trajectory_points = trajectory_points or []  # 保存轨迹点数据
+        self.current_display_azimuth = self.display_azimuth_from_gimbal_command(self.current_azimuth)
         self.last_satellite_visible = False
         self.last_control_error = None
         self.last_command_skipped_time = 0.0
@@ -710,8 +741,10 @@ class SatelliteTracker:
         """获取当前云台位置"""
         result = {
             'azimuth': self.current_azimuth,
+            'display_azimuth': self.current_display_azimuth,
             'elevation': self.current_elevation,
             'is_tracking': self.is_tracking,
+            'gimbal_direction': self.gimbal_direction,
             'stop_reason': self.tracking_stop_reason,
             'stop_elevation': self.tracking_stop_elevation,
             'stop_elevation_threshold': TRACKING_STOP_ELEVATION,
